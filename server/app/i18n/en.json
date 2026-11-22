@@ -7,5 +7,8 @@
   "share.text": "Day {n} of squeaking on 吱鼯計畫. Have you squeaked today?",
   "share.title": "{name}'s squeak card",
   "share.open": "Let me squeak too",
-  "card.clicks": "squeaks"
+  "card.clicks": "squeaks",
+  "card.guest_name": "Guest #{code}",
+  "card.guest": "Guest squeak",
+  "about.yuzumi": "About Yuzumi"
 }

@@ -21,7 +21,10 @@ const state = {
   cardBust: Date.now(),
   resendTimer: null,
   resetTimer: null,
-  zhiMode: null,      // null = 沒開 / "checkin" = 簽到那一下 / "more" = 繼續吱吱
+  guest: null,        // 訪客紀錄 {code, clicks}，只存在這個瀏覽器（localStorage），伺服器不記
+  guestOn: false,     // 現在是訪客吱吱的畫面（沒登入）
+  installPrompt: null, // Android Chrome 的安裝事件
+  zhiMode: null,      // null = 沒開 / "checkin" = 簽到那一下 / "guest" = 訪客那一下 / "more" = 繼續吱吱
   zhiBusy: false,     // 影片播放中：不接受點擊（簽到和繼續吱吱都一樣）
   zhiSkipped: false,  // 今天還沒簽到，但使用者按了「等等再吱」
   zhiPending: 0,      // 還沒送到伺服器的點擊次數
@@ -208,6 +211,7 @@ function bindAuth() {
       try {
         const r = await api("POST", "/api/auth/verify", { email: state.email, code, lang: state.lang });
         state.me = r.user;
+        state.guestOn = false;
         clearInterval(state.resendTimer);
         showCodeStep(false);
         $("email").value = "";
@@ -241,10 +245,12 @@ function bindAuth() {
     await route();
   });
 
-  $("guest-login").addEventListener("click", () => {
-    openMenu();
-    $("email").focus();
-  });
+  for (const id of ["guest-login", "done-login"]) {
+    $(id).addEventListener("click", () => {
+      openMenu();
+      $("email").focus();
+    });
+  }
 }
 
 // ---------- 簽到 ----------
@@ -268,6 +274,9 @@ function cardSrc(d) { return `${d.card_url}?v=${state.cardBust}&c=${d.clicks}`; 
 
 function renderToday(justChecked) {
   const d = state.today;
+  state.guestOn = false;
+  $("share-btn").hidden = false;
+  $("done-login").hidden = true;
   if (!d.checked_in) {
     showCheckinPart("checkin-ready");
     $("ready-stats").textContent = d.total_days || d.clicks ? statsText(d) : "";
@@ -282,6 +291,7 @@ function renderToday(justChecked) {
     $("download-btn").href = src;
     $("download-btn").setAttribute("download", `zhiwu-${d.day}.png`);
     $("done-stats").textContent = statsText(d);
+    updateInstallHint();
   }
   startResetCountdown();
 }
@@ -328,8 +338,129 @@ async function refreshToday() {
 function showGuest() {
   clearInterval(state.resetTimer);
   $("next-reset").hidden = true;
+  if (state.guestOn) { // 正在看訪客小卡（例如換了語言）
+    if (state.zhiMode !== "more") renderGuestCard(false);
+    return;
+  }
   closeStage();
   showCheckinPart("checkin-guest");
+  const g = loadGuest();
+  $("guest-stats").hidden = !g;
+  if (g) $("guest-stats").textContent = guestStatsText(g);
+}
+
+// ---------- 訪客吱吱 ----------
+// 不用登入。代號（訪客 #XXXX）和吱吱次數只存在這個瀏覽器，伺服器什麼都不記；
+// 小卡由伺服器照網址上的代號和次數即時畫出來，沒有 UID、沒有分享連結。
+
+const GUEST_KEY = "zhiwu_guest";
+const GUEST_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // 去掉容易看錯的 0 O 1 I
+
+function loadGuest() {
+  if (state.guest) return state.guest;
+  try {
+    const g = JSON.parse(localStorage.getItem(GUEST_KEY));
+    if (g && /^[A-Z0-9]{4}$/.test(g.code) && Number.isInteger(g.clicks) && g.clicks >= 0) state.guest = g;
+  } catch { /* 沒有紀錄或壞掉了：當作新訪客 */ }
+  return state.guest;
+}
+
+function ensureGuest() {
+  if (loadGuest()) return state.guest;
+  const rnd = crypto.getRandomValues(new Uint8Array(4));
+  state.guest = { code: [...rnd].map((b) => GUEST_CHARS[b % GUEST_CHARS.length]).join(""), clicks: 0 };
+  saveGuest();
+  return state.guest;
+}
+
+function saveGuest() {
+  try { localStorage.setItem(GUEST_KEY, JSON.stringify(state.guest)); } catch { /* 無痕模式存不了就只留在這次 */ }
+}
+
+function addGuestClick() {
+  state.guest.clicks = Math.min(state.guest.clicks + 1, 9999999);
+  saveGuest();
+}
+
+function guestStatsText(g) {
+  return `${t("guest.name", { code: g.code })}　·　${t("checkin.clicks", { n: fmtNum(g.clicks) })}`;
+}
+
+function guestCardSrc(g) {
+  return `/card/guest.png?code=${g.code}&n=${g.clicks}&lang=${state.lang}`;
+}
+
+function renderGuestCard(just) {
+  const g = state.guest;
+  showCheckinPart("checkin-done");
+  $("checkin-msg").textContent = t(just ? "guest.success" : "guest.card");
+  const src = guestCardSrc(g);
+  if ($("card-img").getAttribute("src") !== src) $("card-img").src = src;
+  $("download-btn").href = src;
+  $("download-btn").setAttribute("download", `zhiwu-guest-${g.code}.png`);
+  $("share-btn").hidden = true;   // 伺服器沒有訪客紀錄，沒有可以分享的連結
+  $("done-login").hidden = false;
+  $("done-stats").textContent = guestStatsText(g);
+  updateInstallHint();
+}
+
+// 訪客的那一下：播影片、次數 +1（存在本機），播完而且小卡下載好才亮出小卡
+async function zhiGuest(x, y) {
+  if (state.zhiBusy) return;
+  state.zhiBusy = true;
+  $("zhi-exit").disabled = true;
+  playVideo();
+  burst(x, y);
+  const ended = waitVideoEnd();
+  addGuestClick();
+  state.zhiLastAt = Date.now();
+  await Promise.all([ended, preloadImage(guestCardSrc(state.guest))]);
+  if (state.zhiMode !== "guest") return;
+  closeStage();
+  renderGuestCard(true);
+}
+
+// ---------- 手機：提示安裝到桌面 ----------
+
+const INSTALL_KEY = "zhiwu_install_dismissed";
+
+function canHintInstall() {
+  const mobile = window.matchMedia("(pointer: coarse)").matches && window.matchMedia("(max-width: 760px)").matches;
+  const installed = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  let dismissed = false;
+  try { dismissed = localStorage.getItem(INSTALL_KEY) === "1"; } catch { /* 讀不到就當作沒關過 */ }
+  return mobile && !installed && !dismissed;
+}
+
+// 小卡下方的提示：Android Chrome 有安裝按鈕；iPhone 只能教他從分享選單加入主畫面
+function updateInstallHint() {
+  const el = $("install-hint");
+  if (!canHintInstall()) { el.hidden = true; return; }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  $("install-text").textContent = t(ios ? "install.ios" : state.installPrompt ? "install.android" : "install.generic");
+  $("install-btn").hidden = !state.installPrompt;
+  el.hidden = false;
+}
+
+function bindInstall() {
+  window.addEventListener("beforeinstallprompt", (ev) => {
+    ev.preventDefault(); // 不要讓瀏覽器自己跳橫幅，改由提示上的按鈕觸發
+    state.installPrompt = ev;
+    if (!$("checkin-done").hidden) updateInstallHint();
+  });
+  window.addEventListener("appinstalled", () => { state.installPrompt = null; $("install-hint").hidden = true; });
+  $("install-btn").addEventListener("click", async () => {
+    const ev = state.installPrompt;
+    if (!ev) return;
+    state.installPrompt = null;
+    ev.prompt();
+    await ev.userChoice.catch(() => {});
+    $("install-hint").hidden = true;
+  });
+  $("install-close").addEventListener("click", () => {
+    try { localStorage.setItem(INSTALL_KEY, "1"); } catch { /* 存不了就只關這次 */ }
+    $("install-hint").hidden = true;
+  });
 }
 
 async function showCheckin() {
@@ -433,7 +564,8 @@ function waitVideoEnd() {
 
 function showZhiCount(bump) {
   const el = $("zhi-count");
-  el.textContent = t("zhi.count", { n: fmtNum(state.today?.clicks ?? 0) });
+  const n = state.guestOn ? state.guest.clicks : state.today?.clicks ?? 0;
+  el.textContent = t("zhi.count", { n: fmtNum(n) });
   if (bump) { el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); }
 }
 
@@ -499,10 +631,14 @@ function zhiMore(x, y) {
   const play = ++state.zhiPlay;
   playVideo();
   burst(x, y, 12);
-  state.zhiPending++;
-  state.today.clicks++;
+  if (state.guestOn) {
+    addGuestClick(); // 訪客：只記在本機，不送伺服器
+  } else {
+    state.zhiPending++;
+    state.today.clicks++;
+    flushZhi();
+  }
   showZhiCount(true);
-  flushZhi();
   waitVideoEnd().then(() => {
     if (state.zhiMode !== "more" || state.zhiPlay !== play) return; // 播到一半按了回到小卡（或離開後又進來）
     resetVideo();
@@ -579,7 +715,12 @@ function flushZhiOnLeave() {
 async function exitStage() {
   const mode = state.zhiMode;
   closeStage();
-  if (mode === "more") {
+  if (mode === "guest") {
+    state.guestOn = false; // 訪客按了等等再吱：回到首頁
+    showGuest();
+  } else if (mode === "more" && state.guestOn) {
+    renderGuestCard(false); // 小卡換成新的吱吱次數
+  } else if (mode === "more") {
     $("done-stats").textContent = statsText(state.today); // 數字先更新，小卡等伺服器收到次數後再換
     await flushZhi();
     await refreshToday(); // 小卡換成新的吱吱次數
@@ -598,12 +739,14 @@ function bindCheckin() {
     const x = ev.clientX || window.innerWidth / 2;
     const y = ev.clientY || window.innerHeight / 2;
     if (state.zhiMode === "checkin") zhiCheckin(x, y);
+    else if (state.zhiMode === "guest") zhiGuest(x, y);
     else if (state.zhiMode === "more") zhiMore(x, y);
   });
   $("zhi-exit").addEventListener("click", exitStage);
   $("zhi-auto").addEventListener("click", () => setZhiAuto(!state.zhiAuto));
   $("zhi-open").addEventListener("click", () => { state.zhiSkipped = false; openStage("checkin"); });
   $("zhi-more").addEventListener("click", () => openStage("more"));
+  $("guest-zhi").addEventListener("click", () => { ensureGuest(); state.guestOn = true; openStage("guest"); });
   $("share-btn").addEventListener("click", shareCard);
 
   window.addEventListener("pagehide", flushZhiOnLeave);
@@ -616,7 +759,7 @@ function bindCheckin() {
 
 function showView(id) {
   for (const v of ["view-checkin", "view-user", "view-upload", "view-review"]) $(v).hidden = v !== id;
-  if (id !== "view-checkin") { clearInterval(state.resetTimer); closeStage(); }
+  if (id !== "view-checkin") { clearInterval(state.resetTimer); closeStage(); state.guestOn = false; }
 }
 
 // ---------- 投稿迷因圖 ----------
@@ -900,6 +1043,7 @@ async function init() {
   bindCheckin();
   bindProfile();
   bindTitle();
+  bindInstall();
   bindUpload();
   bindReview();
 

@@ -1,5 +1,6 @@
 """UID 的底色與稱號。
 
+- 一般使用者：淺咖啡底
 - 管理員（UID 0）預設黃底
 - 管理員可以幫任何 UID 指定一個顏色和一個稱號（users.title / users.title_color），會蓋過預設
 都只是顯示用，不帶任何權限。顯示的地方：側欄、個人頁、審核頁、小卡。
@@ -11,6 +12,7 @@ from . import config
 
 # 預設的特殊序號：底色、文字色（網頁的 web/style.css .uid.tier-* 用同樣的顏色）
 TIER_COLORS = {
+    "default": ((201, 162, 122), (42, 20, 0)),    # 淺咖啡 #C9A27A：所有 UID 的預設底色
     "admin": ((255, 209, 102), (42, 20, 0)),      # 黃 #FFD166
 }
 DEFAULT_TITLE_COLOR = "#ff8a1f"   # 只給稱號沒給顏色時用主色
@@ -49,10 +51,9 @@ def badge(user: sqlite3.Row) -> dict:
     }
 
 
-def badge_colors(user: sqlite3.Row) -> tuple[tuple, tuple] | None:
-    """小卡用：(底色, 文字色)；沒有特殊樣式回 None。指定的顏色優先於預設。"""
+def badge_colors(user: sqlite3.Row) -> tuple[tuple, tuple]:
+    """小卡用：(底色, 文字色)。管理員指定的顏色 > 管理員預設黃 > 一般使用者淺咖啡。"""
     if user["title_color"]:
         bg = hex_rgb(user["title_color"])
         return bg, text_on(bg)
-    tier = uid_tier(user["uid"])
-    return TIER_COLORS[tier] if tier else None
+    return TIER_COLORS[uid_tier(user["uid"]) or "default"]

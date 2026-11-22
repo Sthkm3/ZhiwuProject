@@ -24,7 +24,7 @@
   "profile.save": "保存",
   "profile.cancel": "キャンセル",
   "profile.saved": "保存しました",
-  "checkin.login_first": "ログインすると毎日 1 回チューチューして、カードがもらえます。",
+  "checkin.login_first": "ネズミじゃなくて、モモンガです。毎日チューチューしてカードをもらおう。",
   "checkin.ready": "今日はまだチューチューしていません",
   "checkin.success": "チューチュー成功！",
   "checkin.done_today": "今日はもうチューチュー済みです",
@@ -95,5 +95,15 @@
   "title.saved": "称号を更新しました",
   "err.title_too_long": "称号は 16 文字までです",
   "err.invalid_color": "色の形式が正しくありません",
-  "err.user_not_found": "ユーザーが見つかりません"
+  "err.user_not_found": "ユーザーが見つかりません",
+  "guest.button": "ゲストでチューチュー",
+  "guest.name": "ゲスト #{code}",
+  "guest.success": "ゲストチューチュー成功！",
+  "guest.card": "ゲストのカード",
+  "about.yuzumi": "Yuzumi について",
+  "install.ios": "ホーム画面に追加すると毎日チューチューしやすくなります：「共有」→「ホーム画面に追加」",
+  "install.android": "インストールすると毎日チューチューしやすくなります",
+  "install.generic": "ホーム画面に追加すると便利です：ブラウザのメニュー →「ホーム画面に追加」",
+  "install.button": "インストール",
+  "install.close": "閉じる"
 }

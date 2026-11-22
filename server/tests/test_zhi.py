@@ -1,7 +1,7 @@
 """吱吱（點擊）次數：和簽到天數分開記錄，簽到那一下也算一次。"""
 import pytest
 
-from app import checkin, config
+from app import card, checkin, config
 
 from .conftest import login
 
@@ -93,13 +93,13 @@ def test_card_redrawn_when_clicks_change(client, sent, frozen):
     cards = config.DATA_DIR / "cards" / "1"
     first = client.get(r["card_url"])
     assert first.status_code == 200
-    assert [p.name for p in cards.iterdir()] == [f"{r['day']}.v1.c1.png"]
+    assert [p.name for p in cards.iterdir()] == [f"{r['day']}.v{card.CARD_VERSION}.c1.png"]
 
     client.post("/api/zhi", json={"n": 1})
     second = client.get(r["card_url"] + "?c=2")
     assert second.status_code == 200 and second.content != first.content
     # 舊次數的快取會被清掉，只留最新的一張
-    assert [p.name for p in cards.iterdir()] == [f"{r['day']}.v1.c2.png"]
+    assert [p.name for p in cards.iterdir()] == [f"{r['day']}.v{card.CARD_VERSION}.c2.png"]
     # 次數沒變就直接用快取
     assert client.get(r["card_url"] + "?c=2").content == second.content
 

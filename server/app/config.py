@@ -79,4 +79,10 @@ ZHI_BATCH_MAX = 200                # 一次請求的 n 上限（超過直接拒�
 ZHI_RATE = 1                       # 每秒補充幾下
 ZHI_BURST = 1                      # 最多累積幾下
 
+# 訪客小卡：伺服器不存任何訪客資料，每次請求即時畫。畫一張要一點 CPU，所以依 IP 限流
+GUEST_CARD_LIMIT = 30              # 同一 IP 每分鐘最多畫幾張（從快取拿的不算）
+GUEST_CARD_WINDOW = 60
+GUEST_CARD_CACHE = 32              # 記憶體裡留最近幾張（一張約 0.6 MB）
+GUEST_CLICKS_MAX = 9_999_999
+
 COOKIE_NAME = "zhiwu_session"

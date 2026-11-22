@@ -7,5 +7,8 @@
   "share.text": "吱鼯計畫에서 찍찍 {n}일째! 오늘 찍찍 했어?",
   "share.title": "{name}의 찍찍 카드",
   "share.open": "나도 찍찍하기",
-  "card.clicks": "찍찍 횟수"
+  "card.clicks": "찍찍 횟수",
+  "card.guest_name": "게스트 #{code}",
+  "card.guest": "게스트 찍찍",
+  "about.yuzumi": "Yuzumi 소개"
 }

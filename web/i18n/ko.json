@@ -24,7 +24,7 @@
   "profile.save": "저장",
   "profile.cancel": "취소",
   "profile.saved": "저장했습니다",
-  "checkin.login_first": "로그인하면 하루에 한 번 찍찍 출석하고 카드를 받을 수 있습니다.",
+  "checkin.login_first": "쥐가 아니라 날다람쥐예요. 매일 찍찍하고 카드를 받으세요.",
   "checkin.ready": "오늘은 아직 찍찍하지 않았어요",
   "checkin.success": "찍찍 성공!",
   "checkin.done_today": "오늘은 이미 찍찍했어요",
@@ -95,5 +95,15 @@
   "title.saved": "칭호를 업데이트했습니다",
   "err.title_too_long": "칭호는 최대 16자입니다",
   "err.invalid_color": "색상 형식이 올바르지 않습니다",
-  "err.user_not_found": "사용자를 찾을 수 없습니다"
+  "err.user_not_found": "사용자를 찾을 수 없습니다",
+  "guest.button": "게스트 찍찍",
+  "guest.name": "게스트 #{code}",
+  "guest.success": "게스트 찍찍 성공!",
+  "guest.card": "게스트 카드",
+  "about.yuzumi": "Yuzumi 소개",
+  "install.ios": "홈 화면에 추가하면 매일 찍찍하기 편해요: 「공유」→「홈 화면에 추가」",
+  "install.android": "설치하면 매일 찍찍하기 편해요",
+  "install.generic": "홈 화면에 추가하면 편해요: 브라우저 메뉴 →「홈 화면에 추가」",
+  "install.button": "설치",
+  "install.close": "닫기"
 }

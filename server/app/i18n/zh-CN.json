@@ -5,7 +5,10 @@
   "card.streak": "连续 {n} 天",
   "card.no_meme": "梗图准备中",
   "share.text": "我在吱鼯計畫吱吱了 {n} 天，你今天吱吱了吗？",
-  "share.title": "{name} 的吱吱小卡",
+  "share.title": "{name} 的吱咪小卡",
   "share.open": "我也要吱吱",
-  "card.clicks": "吱吱次数"
+  "card.clicks": "吱吱次数",
+  "card.guest_name": "访客 #{code}",
+  "card.guest": "访客吱吱",
+  "about.yuzumi": "关于Yuzumi"
 }

@@ -79,7 +79,11 @@
         <div class="big-mark">吱鼯計畫</div>
         <p class="tagline" data-i18n="site.tagline"></p>
         <p class="muted" data-i18n="checkin.login_first"></p>
-        <button id="guest-login" class="primary" type="button" data-i18n="auth.heading"></button>
+        <div class="row actions">
+          <button id="guest-login" class="primary" type="button" data-i18n="auth.heading"></button>
+          <button id="guest-zhi" type="button" data-i18n="guest.button"></button>
+        </div>
+        <p class="stats" id="guest-stats" hidden></p>
       </div>
       <!-- 今天還沒簽到、但先把全螢幕的吱吱畫面關掉（等等再吱）時顯示 -->
       <div id="checkin-ready" class="center" hidden>
@@ -97,8 +101,15 @@
           <button id="share-btn" class="primary" type="button" data-i18n="share.button"></button>
           <a id="download-btn" class="button" download data-i18n="share.download"></a>
           <button id="zhi-more" type="button" data-i18n="zhi.more"></button>
+          <button id="done-login" type="button" data-i18n="auth.heading" hidden></button>
         </div>
         <p class="stats" id="done-stats"></p>
+        <!-- 手機、還沒安裝到桌面時才顯示 -->
+        <div id="install-hint" class="install-hint" hidden>
+          <span id="install-text"></span>
+          <button id="install-btn" class="primary" type="button" data-i18n="install.button" hidden></button>
+          <button id="install-close" class="icon-btn" type="button" data-i18n-aria="install.close">×</button>
+        </div>
       </div>
       <p class="hint center-text" id="next-reset" hidden></p>
     </section>
@@ -165,6 +176,11 @@
       <p id="user-missing" class="center-text" hidden data-i18n="user.not_found"></p>
       <p class="center-text"><a href="/" data-i18n="user.back"></a></p>
     </section>
+
+    <footer class="site-footer">
+      <span data-i18n="about.yuzumi"></span><br>
+      <a href="https://official-website.meridianproject.tw/talents/yuzumi" target="_blank" rel="noopener noreferrer">official-website.meridianproject.tw/talents/yuzumi</a>
+    </footer>
   </main>
 </div>
 

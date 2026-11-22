@@ -24,7 +24,7 @@
   "profile.save": "Save",
   "profile.cancel": "Cancel",
   "profile.saved": "Saved",
-  "checkin.login_first": "Log in to squeak in once a day and get a squeak card.",
+  "checkin.login_first": "Not a mouse. A flying squirrel. Squeak every day and get a card.",
   "checkin.ready": "You haven't squeaked today",
   "checkin.success": "Squeaked!",
   "checkin.done_today": "You've already squeaked today",
@@ -95,5 +95,15 @@
   "title.saved": "Title updated",
   "err.title_too_long": "Titles can be up to 16 characters",
   "err.invalid_color": "Invalid colour",
-  "err.user_not_found": "User not found"
+  "err.user_not_found": "User not found",
+  "guest.button": "Squeak as guest",
+  "guest.name": "Guest #{code}",
+  "guest.success": "Guest squeak done!",
+  "guest.card": "Guest card",
+  "about.yuzumi": "About Yuzumi",
+  "install.ios": "Add to your Home Screen for easier daily squeaks: tap Share, then Add to Home Screen",
+  "install.android": "Install the app for easier daily squeaks",
+  "install.generic": "Add to your home screen: browser menu, then Add to Home screen",
+  "install.button": "Install",
+  "install.close": "Close"
 }

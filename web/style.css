@@ -96,17 +96,19 @@ button.link:disabled { color: var(--muted); }
 
 .beta { font-size: 12px; font-weight: 600; color: var(--muted); }
 
-/* UID 與稱號：管理員預設黃底（和 server/app/titles.py TIER_COLORS 一致）；
+/* UID 與稱號：每個 UID 都有底色。一般使用者淺咖啡、管理員黃（和 server/app/titles.py TIER_COLORS 一致）；
    管理員指定的顏色由 app.js 直接寫在 style 上 */
 .uid-wrap { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .profile .uid-wrap { justify-content: center; }
-.uid { color: var(--muted); font-variant-numeric: tabular-nums; }
-.uid.badge, .title-badge {
+.uid, .title-badge {
   display: inline-block;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   padding: 2px 10px;
   border-radius: 8px;
   margin-top: 2px;
+  background: #c9a27a;
+  color: #2a1400;
 }
 .uid.tier-admin, .title-badge.tier-admin { background: #ffd166; color: #2a1400; }
 
@@ -128,7 +130,35 @@ button.link:disabled { color: var(--muted); }
 .lang { margin-top: auto; }
 
 /* ---------- 主畫面 ---------- */
-#main { flex: 1; padding: 40px 24px; display: flex; justify-content: center; }
+#main { flex: 1; min-width: 0; padding: 40px 24px 24px; display: flex; flex-direction: column; align-items: center; }
+
+/* 每一頁最底下：關於 Yuzumi */
+.site-footer {
+  margin-top: auto;
+  padding-top: 48px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* 手機：提示可以安裝到桌面 */
+.install-hint {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  font-size: 14px;
+  padding: 10px 12px 10px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.install-hint span { flex: 1; }
+.install-hint .primary { padding: 6px 16px; white-space: nowrap; }
+.install-hint .icon-btn { border: none; background: none; color: var(--muted); padding: 0 6px; }
 #view-checkin, #view-user, #view-upload, #view-review { width: 100%; max-width: 560px; }
 #view-upload h1, #view-review h1 { font-size: 24px; margin: 0 0 8px; }
 #view-upload h2 { font-size: 18px; margin: 28px 0 12px; }
@@ -375,7 +405,7 @@ dialog h2 { margin: 0 0 4px; }
   .only-mobile { display: inline-flex; }
   #sidebar:not(.open) #sidebar-body { display: none; }
   #sidebar-body { padding-bottom: 8px; }
-  #main { padding: 24px 16px; }
+  #main { padding: 24px 16px 20px; }
   .big-logo { margin-top: 4vh; }
   .big-mark { font-size: 48px; }
 }
