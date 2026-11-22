@@ -1,0 +1,11 @@
+{
+  "mail.subject": "吱鼯計畫 验证码：{code}",
+  "mail.body": "你的 吱鼯計畫 验证码是：\n\n{code}\n\n5 分钟内有效。如果这不是你本人的操作，请直接忽略这封邮件。\n\n{url}",
+  "card.day": "签到第 {n} 天",
+  "card.streak": "连续 {n} 天",
+  "card.no_meme": "梗图准备中",
+  "share.text": "我在吱鼯計畫吱吱了 {n} 天，你今天吱吱了吗？",
+  "share.title": "{name} 的吱吱小卡",
+  "share.open": "我也要吱吱",
+  "card.clicks": "吱吱次数"
+}

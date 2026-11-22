@@ -1,0 +1,82 @@
+"""環境變數設定。其他模組一律用 `config.X` 取值（測試會直接改這裡的屬性）。"""
+import os
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+# 每日簽到的分界：台灣時間 04:00（程式一律明確用這個時區，不依賴容器的 TZ）
+TZ = ZoneInfo("Asia/Taipei")
+DAY_START_HOUR = 4
+
+LANGS = ("zh-TW", "zh-CN", "ja", "ko", "en")
+DEFAULT_LANG = "zh-TW"
+
+_HERE = Path(__file__).resolve().parent
+
+
+def _default_web_dir() -> Path:
+    # Docker 裡是 /app/web；本機開發是 <repo>/web
+    for p in (_HERE.parent / "web", _HERE.parent.parent / "web"):
+        if p.is_dir():
+            return p
+    return _HERE.parent / "web"
+
+
+def _default_meme_dir() -> Path:
+    return _HERE.parent.parent / "image"
+
+
+DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
+MEME_DIR = Path(os.environ.get("MEME_DIR") or _default_meme_dir())
+WEB_DIR = Path(os.environ.get("WEB_DIR") or _default_web_dir())
+
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "http://127.0.0.1:2040").rstrip("/")
+COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
+# Beta 期間：網頁標題加 (Beta)、小卡右下角加 · Beta。正式上線設 BETA=0
+BETA = os.environ.get("BETA", "0") == "1"
+
+# 寄信用的 SMTP。預設 Gmail（帳號 + 應用程式密碼）；換成其他寄信服務只要改這幾個值
+SMTP_HOST = os.environ.get("SMTP_HOST") or "smtp.gmail.com"
+SMTP_PORT = int(os.environ.get("SMTP_PORT") or 465)   # 465 = SSL；587 = STARTTLS
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+MAIL_FROM = os.environ.get("MAIL_FROM") or "noreply@zhiwu-project.sthkm3.org"
+
+# 小卡字型；沒設定時依序找 Noto Sans CJK（Docker）→ Windows 內建字型 → Pillow 預設字型
+FONT_REGULAR = os.environ.get("FONT_REGULAR", "")
+FONT_BOLD = os.environ.get("FONT_BOLD", "")
+
+CODE_TTL = 5 * 60            # 驗證碼有效 5 分鐘
+CODE_RESEND = 60             # 同一信箱 60 秒內不能重寄
+CODE_MAX_ATTEMPTS = 5        # 錯 5 次作廢
+IP_LIMIT = 10                # 同一 IP 10 分鐘最多寄 10 次
+IP_WINDOW = 10 * 60
+SESSION_TTL = 90 * 24 * 3600
+ADMIN_SESSION_TTL = 7 * 24 * 3600
+
+# 管理員：信箱欄輸入 ADMIN_LOGIN，驗證碼是 ADMIN_TOTP（base32 密鑰）算出的 TOTP。兩個都設定才啟用
+ADMIN_LOGIN = os.environ.get("ADMIN_LOGIN", "").strip()
+ADMIN_TOTP = os.environ.get("ADMIN_TOTP", "").strip()
+ADMIN_UID = 0
+ADMIN_MAX_FAILS = 3                 # 錯 3 次就鎖
+ADMIN_LOCK_BASE = 15 * 60           # 第一次鎖 15 分，之後每次加倍
+ADMIN_LOCK_MAX = 24 * 3600
+
+UID_MAX = 99_999_999                # UID 顯示成 8 碼
+
+NAME_MAX = 32
+TITLE_MAX = 16                      # 管理員指定的稱號長度上限
+BIO_MAX = 2000
+AVATAR_MAX_BYTES = 5 * 1024 * 1024
+AVATAR_SIZE = 1024
+
+# 使用者投稿迷因圖：每個帳號每天（04:00 換日）最多 5 張，被拒絕的也算
+SUBMIT_PER_DAY = 5
+SUBMIT_MAX_BYTES = 5 * 1024 * 1024    # 和大頭貼一樣，錯誤訊息寫的是 5MB
+SUBMIT_MAX_SIDE = 2048             # 長邊超過就等比例縮小
+
+# 繼續吱吱：一個帳號一秒只能吱一次（token bucket，額度最多存 1 下，所以兩下之間至少隔 1 秒）
+ZHI_BATCH_MAX = 200                # 一次請求的 n 上限（超過直接拒絕）；實際加幾下由下面兩個值決定
+ZHI_RATE = 1                       # 每秒補充幾下
+ZHI_BURST = 1                      # 最多累積幾下
+
+COOKIE_NAME = "zhiwu_session"

@@ -1,0 +1,49 @@
+# 吱鼯計畫：簽到伺服器（FastAPI + SQLite）與網站
+# 用法：複製 .env.example 成 .env 後執行 docker compose up -d --build
+# 對外：cloudflared 的 Public Hostname zhiwu-project.sthkm3.org → http://zhiwuproject:2040
+
+name: zhiwuproject
+
+services:
+  zhiwuproject:
+    container_name: zhiwuproject   # cloudflared 用這個名字連進來（http://zhiwuproject:2040）
+    hostname: zhiwuproject
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:2041}
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      BETA: ${BETA:-0}           # 1 = 網頁標題與小卡標示 Beta
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-noreply@zhiwu-project.sthkm3.org}
+      ADMIN_LOGIN: ${ADMIN_LOGIN:-}
+      ADMIN_TOTP: ${ADMIN_TOTP:-}
+      TZ: Asia/Taipei            # 容器時區（log、date）；換日邏輯在程式裡固定用台灣時間 04:00
+    volumes:
+      - zhiwu-data:/data         # zhiwu.db、avatars/、cards/、submissions/
+      - ./image:/memes           # 圖庫放在 image/；管理員同意的投稿也會寫進這裡（zhiwu_<n>.jpg）
+    ports:
+      # 只給本機除錯用（http://127.0.0.1:2041）。tunnel 走容器網路的 2040，不經過這裡
+      - "127.0.0.1:${PORT:-2041}:2040"
+    networks:
+      - tunnel
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:2040/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  # cloudflared 容器所在的網路，兩邊在同一個網路才能用容器名稱互連。
+  # 名稱寫在 .env 的 TUNNEL_NETWORK（docker network ls 可以查）；沒有就先建：docker network create tunnel
+  tunnel:
+    external: true
+    name: ${TUNNEL_NETWORK:-tunnel}
+
+volumes:
+  zhiwu-data:

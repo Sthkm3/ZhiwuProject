@@ -1,0 +1,11 @@
+{
+  "mail.subject": "吱鼯計畫 認証コード：{code}",
+  "mail.body": "吱鼯計畫 の認証コードは：\n\n{code}\n\n有効期限は 5 分です。お心当たりのない場合は、このメールを破棄してください。\n\n{url}",
+  "card.day": "ログイン {n} 日目",
+  "card.streak": "連続 {n} 日",
+  "card.no_meme": "画像準備中",
+  "share.text": "吱鼯計畫でチューチュー {n} 日目！今日はもうチューチューした？",
+  "share.title": "{name} のチューチューカード",
+  "share.open": "自分もチューチューする",
+  "card.clicks": "チューチュー回数"
+}

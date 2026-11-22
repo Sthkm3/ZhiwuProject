@@ -1,0 +1,11 @@
+{
+  "mail.subject": "Your 吱鼯計畫 code: {code}",
+  "mail.body": "Your 吱鼯計畫 verification code is:\n\n{code}\n\nIt expires in 5 minutes. If you didn't request this, you can ignore this email.\n\n{url}",
+  "card.day": "Day {n}",
+  "card.streak": "{n}-day streak",
+  "card.no_meme": "Meme coming soon",
+  "share.text": "Day {n} of squeaking on 吱鼯計畫. Have you squeaked today?",
+  "share.title": "{name}'s squeak card",
+  "share.open": "Let me squeak too",
+  "card.clicks": "squeaks"
+}

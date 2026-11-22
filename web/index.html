@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>吱鼯計畫<!--BETA_TITLE--> — 你今天吱吱了嗎</title>
+<meta name="description" content="吱鼯計畫：你今天吱吱了嗎">
+<meta name="theme-color" content="#1a0f06">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/assets/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="manifest" href="/assets/manifest.webmanifest">
+<meta name="asset-version" content="__ASSET_VERSION__">
+<link rel="stylesheet" href="/assets/style.css?v=__ASSET_VERSION__">
+<script type="module" src="/assets/app.js?v=__ASSET_VERSION__"></script>
+<link rel="preload" as="image" href="/assets/media/zhizhi-poster.webp?v=__ASSET_VERSION__">
+</head>
+<body>
+<div class="layout">
+  <aside id="sidebar">
+    <div class="brand">
+      <a href="/"><img class="logo" src="/assets/logo.png" alt="" width="32" height="32"><span class="brand-text"><b>吱鼯計畫<!--BETA_BADGE--></b><small data-i18n="site.tagline"></small></span></a>
+      <button id="menu-toggle" class="icon-btn only-mobile" type="button" data-i18n-aria="menu">☰</button>
+    </div>
+
+    <div id="sidebar-body">
+      <section id="auth-box" hidden>
+        <h2 data-i18n="auth.heading"></h2>
+        <p class="hint" data-i18n="auth.hint"></p>
+        <form id="email-form" novalidate>
+          <label><span data-i18n="auth.email"></span>
+            <input type="text" inputmode="email" id="email" required autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="254">
+          </label>
+          <button type="submit" class="primary" data-i18n="auth.send"></button>
+        </form>
+        <form id="code-form" hidden novalidate>
+          <p class="hint" id="code-sent-msg"></p>
+          <label><span data-i18n="auth.code"></span>
+            <input id="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required>
+          </label>
+          <button type="submit" class="primary" data-i18n="auth.verify"></button>
+          <div class="row">
+            <button type="button" class="link" id="resend"></button>
+            <button type="button" class="link" id="change-email" data-i18n="auth.change_email"></button>
+          </div>
+        </form>
+        <p class="error" id="auth-error" hidden></p>
+      </section>
+
+      <section id="me-box" hidden>
+        <img id="me-avatar" class="avatar" alt="" width="96" height="96">
+        <div class="me-name" id="me-name"></div>
+        <div class="uid" id="me-uid"></div>
+        <nav class="me-nav">
+          <a id="me-link" href="/" data-i18n="profile.view"></a>
+          <a id="upload-link" href="/upload" data-i18n="nav.upload"></a>
+          <a id="review-link" href="/review" hidden></a>
+          <button type="button" class="link" id="edit-profile" data-i18n="profile.edit"></button>
+          <button type="button" class="link" id="logout" data-i18n="auth.logout"></button>
+        </nav>
+      </section>
+
+      <label class="lang"><span data-i18n="lang.label"></span>
+        <select id="lang">
+          <option value="zh-TW">繁體中文</option>
+          <option value="zh-CN">简体中文</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+    </div>
+  </aside>
+
+  <main id="main">
+    <section id="view-checkin" hidden>
+      <div id="checkin-guest" class="center" hidden>
+        <img class="big-logo" src="/assets/icon-192.png" alt="" width="120" height="120">
+        <div class="big-mark">吱鼯計畫</div>
+        <p class="tagline" data-i18n="site.tagline"></p>
+        <p class="muted" data-i18n="checkin.login_first"></p>
+        <button id="guest-login" class="primary" type="button" data-i18n="auth.heading"></button>
+      </div>
+      <!-- 今天還沒簽到、但先把全螢幕的吱吱畫面關掉（等等再吱）時顯示 -->
+      <div id="checkin-ready" class="center" hidden>
+        <p class="muted" data-i18n="checkin.ready"></p>
+        <button id="zhi-open" class="zhi-open" type="button">
+          <img src="/assets/media/zhizhi-poster.webp?v=__ASSET_VERSION__" alt="" width="1080" height="1920" draggable="false">
+          <span class="zhi-open-label" data-i18n="zhi.open"></span>
+        </button>
+        <p class="stats" id="ready-stats"></p>
+      </div>
+      <div id="checkin-done" class="center" hidden>
+        <p class="checkin-msg" id="checkin-msg"></p>
+        <img id="card-img" class="card-img" alt="" width="1080" height="1350">
+        <div class="row actions">
+          <button id="share-btn" class="primary" type="button" data-i18n="share.button"></button>
+          <a id="download-btn" class="button" download data-i18n="share.download"></a>
+          <button id="zhi-more" type="button" data-i18n="zhi.more"></button>
+        </div>
+        <p class="stats" id="done-stats"></p>
+      </div>
+      <p class="hint center-text" id="next-reset" hidden></p>
+    </section>
+
+    <section id="view-upload" hidden>
+      <h1 data-i18n="upload.heading"></h1>
+      <p class="hint" data-i18n="upload.hint"></p>
+      <div class="row upload-bar">
+        <label class="button primary" for="upload-file" id="upload-pick" data-i18n="upload.choose"></label>
+        <input type="file" id="upload-file" accept="image/*" multiple hidden>
+        <span class="muted" id="upload-quota"></span>
+      </div>
+      <p class="error" id="upload-error" hidden></p>
+      <h2 data-i18n="upload.mine"></h2>
+      <p class="hint" id="upload-empty" data-i18n="upload.empty" hidden></p>
+      <div class="sub-grid" id="upload-list"></div>
+    </section>
+
+    <section id="view-review" hidden>
+      <h1 data-i18n="review.heading"></h1>
+      <p class="muted" id="review-left"></p>
+      <div id="review-item" class="center" hidden>
+        <img id="review-img" class="review-img" alt="">
+        <p class="review-meta">
+          <a id="review-name" href="/"></a> <span class="uid" id="review-uid"></span><br>
+          <span class="hint" id="review-time"></span>
+        </p>
+        <div class="row actions">
+          <button type="button" id="review-reject" data-i18n="review.reject"></button>
+          <button type="button" class="primary" id="review-approve" data-i18n="review.approve"></button>
+        </div>
+      </div>
+      <p class="center-text muted" id="review-empty" data-i18n="review.empty" hidden></p>
+    </section>
+
+    <section id="view-user" hidden>
+      <div id="user-card" class="profile" hidden>
+        <img id="user-avatar" class="avatar large" alt="" width="160" height="160">
+        <h1 id="user-name"></h1>
+        <div class="uid" id="user-uid"></div>
+        <p class="stats" id="user-stats"></p>
+        <div class="bio" id="user-bio"></div>
+        <p class="hint" id="user-joined"></p>
+        <!-- 管理員才看得到：指定這個 UID 的顏色與稱號 -->
+        <form id="title-form" class="title-form" hidden novalidate>
+          <h2 data-i18n="title.heading"></h2>
+          <div class="row">
+            <label class="grow"><span data-i18n="title.name"></span>
+              <input id="title-text" maxlength="16" autocomplete="off">
+            </label>
+            <label><span data-i18n="title.color"></span>
+              <input id="title-color" type="color" value="#ff8a1f">
+            </label>
+          </div>
+          <p class="hint" data-i18n="title.hint"></p>
+          <p class="error" id="title-error" hidden></p>
+          <div class="row">
+            <span class="spacer"></span>
+            <button type="button" id="title-clear" data-i18n="title.clear"></button>
+            <button type="submit" class="primary" id="title-save" data-i18n="title.save"></button>
+          </div>
+        </form>
+      </div>
+      <p id="user-missing" class="center-text" hidden data-i18n="user.not_found"></p>
+      <p class="center-text"><a href="/" data-i18n="user.back"></a></p>
+    </section>
+  </main>
+</div>
+
+<dialog id="profile-dialog">
+  <form id="profile-form" method="dialog" novalidate>
+    <h2 data-i18n="profile.edit"></h2>
+    <div class="avatar-edit">
+      <img id="edit-avatar" class="avatar" alt="" width="96" height="96">
+      <div>
+        <label class="button" for="avatar-file" data-i18n="profile.avatar_change"></label>
+        <input type="file" id="avatar-file" accept="image/*" hidden>
+        <p class="hint" data-i18n="profile.avatar_hint"></p>
+      </div>
+    </div>
+    <label><span data-i18n="profile.name"></span>
+      <input id="edit-name" maxlength="32" required>
+    </label>
+    <label><span data-i18n="profile.bio"></span>
+      <textarea id="edit-bio" rows="8" maxlength="2000"></textarea>
+    </label>
+    <div class="bio preview" id="edit-preview" hidden></div>
+    <p class="error" id="profile-error" hidden></p>
+    <div class="row dialog-actions">
+      <button type="button" class="link" id="preview-toggle" data-i18n="profile.preview"></button>
+      <span class="spacer"></span>
+      <button type="button" id="profile-cancel" data-i18n="profile.cancel"></button>
+      <button type="submit" class="primary" id="profile-save" data-i18n="profile.save"></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 全螢幕吱吱：還沒點時停在影片第一幀；簽到模式播完跳小卡，繼續吱吱模式可以一直點 -->
+<div id="zhi-stage" class="zhi-stage" hidden>
+  <video id="zhi-video" src="/assets/media/zhizhi.mp4?v=__ASSET_VERSION__" poster="/assets/media/zhizhi-poster.webp?v=__ASSET_VERSION__"
+         playsinline webkit-playsinline preload="auto" disablepictureinpicture disableremoteplayback></video>
+  <div id="zhi-hint" class="zhi-hint" data-i18n="zhi.hint"></div>
+  <div id="zhi-count" class="zhi-count" hidden></div>
+  <button id="zhi-exit" class="zhi-exit" type="button"></button>
+  <!-- 繼續吱吱才有：打開後播完自動接著吱下一次 -->
+  <button id="zhi-auto" class="zhi-auto" type="button" aria-pressed="false" hidden></button>
+</div>
+
+<div id="toast" role="status" hidden></div>
+</body>
+</html>

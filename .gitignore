@@ -1,0 +1,9 @@
+.env
+*.ipynb
+__pycache__/
+.pytest_cache/
+.venv/
+data/
+
+# 圖庫（使用者自己提供）
+image/
