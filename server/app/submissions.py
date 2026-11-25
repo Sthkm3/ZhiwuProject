@@ -195,6 +195,7 @@ def approve(sid: int, admin=Depends(admin_user), conn: sqlite3.Connection = Depe
         os.close(fd)
         try:
             shutil.copyfile(src, tmp)
+            os.chmod(tmp, 0o644)  # mkstemp 是 0600，圖庫要讓 NAS 上的其他帳號也讀得到
             os.replace(tmp, config.MEME_DIR / name)
         except BaseException:
             Path(tmp).unlink(missing_ok=True)

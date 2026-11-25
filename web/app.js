@@ -4,12 +4,13 @@ const HTML_LANG = { "zh-TW": "zh-Hant-TW", "zh-CN": "zh-Hans-CN", ja: "ja", ko: 
 const DEFAULT_AVATAR = "/assets/avatar.svg";
 
 const $ = (id) => document.getElementById(id);
-const HOME_TITLE = document.title; // 「吱鼯計畫 — 你今天吱吱了嗎」，伺服器會依 BETA 開關加上 (Beta)
+const HOME_TITLE = document.title; // 「吱鼯計畫 — 你今天吱吱了嗎」
 const SITE_TITLE = HOME_TITLE.split(" — ")[0]; // 其他頁面的標題只接站名
 // 伺服器填入的檔案版本，語言檔網址也帶上，改版後不會拿到快取的舊檔
 const ASSET_V = document.querySelector('meta[name="asset-version"]')?.content || "";
 const VIDEO_MAX_MS = 4000;   // 吱吱影片約 1.6 秒；ended 沒觸發（例如播放失敗）時的保險時間
-const ZHI_GAP_MS = 1100;     // 伺服器一個帳號一秒只收一下；補送沒送成功的次數時，每下隔這麼久
+const ZHI_GAP_MS = 1550;     // 伺服器一個帳號 1.5 秒只收一下；補送沒送成功的次數時，每下隔這麼久
+const ZHI_COOL_MS = 10000;   // 太頻繁被伺服器要求冷靜的時間
 const SUBMIT_MAX_BYTES = 5 * 1024 * 1024;
 
 const state = {
@@ -31,6 +32,8 @@ const state = {
   zhiTimer: null,
   zhiAuto: false,     // 全自動吱吱開著：播完自動接下一次
   zhiAutoTimer: null,
+  zhiCoolUntil: 0,    // 冷靜到什麼時候
+  noticeCount: 0,     // 通知匣已經載入幾則
   zhiLastAt: 0,       // 上一次繼續吱吱的時間
   zhiPlay: 0,         // 第幾次播放；離開再進來時，舊的那次播完不能動到新的
   zhiFlush: null,     // 正在送次數的 Promise（離開時等它送完）
@@ -157,7 +160,11 @@ function renderSidebar() {
   showUid($("me-uid"), me);
   $("me-link").href = `/u/${me.uid_str}`;
   $("review-link").hidden = !me.is_admin;
-  if (me.is_admin) $("review-link").textContent = t("nav.review", { n: me.pending_reviews ?? 0 });
+  $("notices-link").hidden = !me.is_admin;
+  if (me.is_admin) {
+    $("review-link").textContent = t("nav.review", { n: me.pending_reviews ?? 0 });
+    $("notices-link").textContent = t("nav.notices", { n: me.unread_notices ?? 0 });
+  }
 }
 
 function showCodeStep(show) {
@@ -624,7 +631,8 @@ async function zhiCheckin(x, y) {
 // 繼續吱吱：播放中再點沒有反應；播完回到第一幀才能點下一次
 function zhiMore(x, y) {
   if (state.zhiBusy) return;
-  // 一個帳號一秒只能吱一次（伺服器也會擋）。影片比 1 秒長，只有離開再馬上進來時會遇到
+  if (Date.now() < state.zhiCoolUntil) { toast(t("err.cooldown")); return; }
+  // 一個帳號 1.5 秒只能吱一次（伺服器也會擋）。影片比 1.5 秒長，只有離開再馬上進來時會遇到
   if (Date.now() - state.zhiLastAt < ZHI_GAP_MS) return;
   state.zhiLastAt = Date.now();
   state.zhiBusy = true;
@@ -660,7 +668,7 @@ function setZhiAuto(on) {
   if (on) zhiAutoTick();
 }
 
-// 可以吱就吱一下（從畫面中央）；正在播就等它播完再被叫一次；離上一下不到 1 秒就等滿再吱
+// 可以吱就吱一下（從畫面中央）；正在播就等它播完再被叫一次；離上一下太近就等滿再吱
 function zhiAutoTick() {
   if (!state.zhiAuto || state.zhiMode !== "more" || state.zhiBusy) return;
   const wait = ZHI_GAP_MS - (Date.now() - state.zhiLastAt);
@@ -674,7 +682,7 @@ function zhiAutoTick() {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// 把還沒送的次數一下一下送給伺服器（伺服器一個帳號一秒只收一下）
+// 把還沒送的次數一下一下送給伺服器（伺服器一個帳號 1.5 秒只收一下）
 function flushZhi() {
   clearTimeout(state.zhiTimer);
   state.zhiTimer = null;
@@ -683,19 +691,33 @@ function flushZhi() {
 }
 
 async function sendZhi() {
+  let retried = false;
   while (state.zhiPending > 0) {
+    const sentAt = Date.now();
     try {
       const r = await api("POST", "/api/zhi", { n: 1 });
-      state.zhiPending--;
+      // 網路抖動讓兩下太近、伺服器沒算到：重送一次。再失敗或已經積了幾下就放棄（例如兩台裝置同時在吱）
+      if (r.added || retried || state.zhiPending > 2) { state.zhiPending--; retried = false; } else retried = true;
       // 以伺服器的數字為準，再加上還沒送出的
       if (state.today) state.today.clicks = r.clicks + state.zhiPending;
     } catch (e) {
       if (e.status === 401 || e.status === 400) { state.zhiPending = 0; return; } // 登出了：這幾下就不算
+      if (e.code === "cooldown") return coolDown();
       state.zhiTimer = setTimeout(flushZhi, ZHI_GAP_MS * 3); // 網路問題：留著等一下再送
       return;
     }
-    if (state.zhiPending > 0) await sleep(ZHI_GAP_MS);
+    if (state.zhiPending > 0) await sleep(Math.max(0, ZHI_GAP_MS - (Date.now() - sentAt)));
   }
+  if (state.zhiMode === "more") showZhiCount(false);
+}
+
+// 太頻繁：伺服器要求冷靜 10 秒。沒送出的不算，畫面上的次數改回伺服器的數字
+async function coolDown() {
+  state.zhiPending = 0;
+  state.zhiCoolUntil = Date.now() + ZHI_COOL_MS;
+  setZhiAuto(false);
+  toast(t("err.cooldown"));
+  try { state.today = await api("GET", "/api/checkin/today"); } catch { /* 下次重新整理會更新 */ }
   if (state.zhiMode === "more") showZhiCount(false);
 }
 
@@ -758,7 +780,7 @@ function bindCheckin() {
 // ---------- 畫面切換 ----------
 
 function showView(id) {
-  for (const v of ["view-checkin", "view-user", "view-upload", "view-review"]) $(v).hidden = v !== id;
+  for (const v of ["view-checkin", "view-user", "view-upload", "view-review", "view-notices"]) $(v).hidden = v !== id;
   if (id !== "view-checkin") { clearInterval(state.resetTimer); closeStage(); state.guestOn = false; }
 }
 
@@ -881,6 +903,71 @@ function bindReview() {
   $("review-reject").addEventListener("click", () => decide("reject"));
 }
 
+// ---------- 管理員通知匣 ----------
+
+function noticeItem(n) {
+  const li = document.createElement("li");
+  li.classList.toggle("unread", n.unread);
+  const title = document.createElement("b");
+  title.textContent = t(`notice.${n.kind}`);
+  li.append(title);
+  if (n.count > 1) li.append(` ×${fmtNum(n.count)}`);
+  if (n.uid_str) {
+    const a = document.createElement("a");
+    a.href = `/u/${n.uid_str}`;
+    a.textContent = `${n.display_name} (UID ${n.uid_str})`;
+    li.append("　", a);
+  }
+  if (n.detail) {
+    const d = document.createElement("div");
+    d.textContent = n.detail;
+    li.append(d);
+  }
+  const time = document.createElement("div");
+  time.className = "hint";
+  time.textContent = new Date(n.updated_at).toLocaleString(HTML_LANG[state.lang]);
+  li.append(time);
+  return li;
+}
+
+async function loadNotices(reset) {
+  try {
+    if (reset) state.noticeCount = 0;
+    const r = await api("GET", `/api/admin/notices?offset=${state.noticeCount}`);
+    if (reset) $("notices-list").replaceChildren();
+    $("notices-list").append(...r.items.map(noticeItem));
+    state.noticeCount += r.items.length;
+    $("notices-empty").hidden = state.noticeCount > 0;
+    $("notices-more").hidden = !r.items.length || state.noticeCount >= r.total;
+    if (reset && r.items.length) { // 打開就算看過了
+      state.me.unread_notices = (await api("POST", "/api/admin/notices/read", { upto: r.upto })).unread;
+      renderSidebar();
+    }
+  } catch (e) {
+    if (e.status === 401 || e.status === 403) { location.replace("/"); return; }
+    toast(errText(e));
+  }
+}
+
+async function showNotices() {
+  showView("view-notices");
+  document.title = `${t("notices.heading")} · ${SITE_TITLE}`;
+  if (!state.me?.is_admin) { location.replace("/"); return; }
+  await loadNotices(true);
+}
+
+function bindNotices() {
+  $("notices-more").addEventListener("click", () => withBusy($("notices-more"), () => loadNotices(false)));
+  $("flag-clear").addEventListener("click", () => withBusy($("flag-clear"), async () => {
+    try {
+      const uid = $("flag-box").dataset.uid;
+      await api("DELETE", `/api/admin/users/${uid}/flag`);
+      toast(t("flag.cleared"));
+      await showUser(uid);
+    } catch (e) { toast(errText(e)); }
+  }));
+}
+
 // ---------- 個人頁 ----------
 
 async function showUser(uid) {
@@ -895,6 +982,8 @@ async function showUser(uid) {
     // 管理員：下面多一個設定這個 UID 顏色與稱號的表單
     const form = $("title-form");
     form.hidden = !state.me?.is_admin;
+    $("flag-box").hidden = !u.flagged;
+    $("flag-box").dataset.uid = u.uid;
     form.dataset.uid = u.uid;
     $("title-text").value = u.title || "";
     $("title-color").value = u.title_color || "#ff8a1f";
@@ -1034,6 +1123,7 @@ async function route() {
   if (m) return showUser(m[1]);
   if (location.pathname === "/upload") return showUpload();
   if (location.pathname === "/review") return showReview();
+  if (location.pathname === "/notices") return showNotices();
   return showCheckin();
 }
 
@@ -1046,6 +1136,7 @@ async function init() {
   bindInstall();
   bindUpload();
   bindReview();
+  bindNotices();
 
   $("menu-toggle").addEventListener("click", () => $("sidebar").classList.toggle("open"));
 

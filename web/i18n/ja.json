@@ -105,5 +105,18 @@
   "install.android": "インストールすると毎日チューチューしやすくなります",
   "install.generic": "ホーム画面に追加すると便利です：ブラウザのメニュー →「ホーム画面に追加」",
   "install.button": "インストール",
-  "install.close": "閉じる"
+  "install.close": "閉じる",
+  "nav.notices": "通知（{n}）",
+  "notices.heading": "通知",
+  "notices.empty": "通知はありません",
+  "notices.more": "もっと読み込む",
+  "notice.flagged": "アカウントをマーク：チューチューの回数が理論上の上限を超えています",
+  "notice.cooldown": "チューチューが頻繁すぎるためクールダウン中",
+  "notice.error": "サーバーエラー",
+  "notice.mail_failed": "確認メールの送信に失敗",
+  "notice.admin_locked": "管理者ログインがロックされました",
+  "flag.text": "このアカウントはマークされています：チューチューの回数が理論上の上限を超えています。",
+  "flag.clear": "マークを解除",
+  "flag.cleared": "マークを解除しました",
+  "err.cooldown": "速すぎます。10 秒待ってからどうぞ"
 }

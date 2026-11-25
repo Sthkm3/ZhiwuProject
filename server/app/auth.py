@@ -12,7 +12,7 @@ from collections import defaultdict, deque
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
-from . import clock, config, db, mailer, totp
+from . import clock, config, db, mailer, notices, totp
 from .db import get_db, get_meta, set_meta, transaction
 from .deps import client_ip, current_user, fail, session_token, sha256
 from .i18n import norm_lang
@@ -93,6 +93,7 @@ def request_code(body: CodeRequest, request: Request, conn: sqlite3.Connection =
     except Exception as e:
         print("Error sending email:", e, flush=True)
         conn.execute("DELETE FROM login_codes WHERE email = ?", (email,))
+        notices.add("mail_failed", None, type(e).__name__)
         fail(502, "send_failed")
     return sent
 
@@ -126,7 +127,8 @@ def admin_check(conn: sqlite3.Connection, code: str, ip: str) -> str | None:
         set_meta(conn, "admin_lock_level", level + 1)
         set_meta(conn, "admin_lock_until", now + lock)
         print(f"[ADMIN] locked for {lock // 60} min", flush=True)
-        return "too_many_requests"
+    notices.add("admin_locked", None, f"{lock // 60} min")   # 交易結束後才寫
+    return "too_many_requests"
 
 
 def issue_session(conn: sqlite3.Connection, response: Response, user: sqlite3.Row) -> dict:

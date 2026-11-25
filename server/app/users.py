@@ -11,10 +11,10 @@ from markdown_it import MarkdownIt
 from PIL import Image, ImageOps
 from pydantic import BaseModel
 
-from . import card, clock, config
+from . import card, clock, config, notices
 from .checkin import stats
 from .db import get_db, transaction
-from .deps import admin_user, current_user, fail
+from .deps import admin_user, current_user, fail, optional_user
 from .i18n import norm_lang
 from .titles import DEFAULT_TITLE_COLOR, badge, fmt_uid, valid_color
 
@@ -89,6 +89,7 @@ def profile(conn: sqlite3.Connection, user: sqlite3.Row, lang: str, private: boo
         if out["is_admin"]:
             out["pending_reviews"] = conn.execute(
                 "SELECT COUNT(*) FROM submissions WHERE status = 'pending'").fetchone()[0]
+            out["unread_notices"] = notices.unread_count(conn)
     return out
 
 
@@ -175,6 +176,8 @@ def put_avatar(file: UploadFile = File(...), user=Depends(current_user),
 
 @router.get("/avatars/{uid}.webp")
 def get_avatar(uid: int):
+    if not 0 <= uid <= config.UID_MAX:
+        fail(404, "not_found")
     path = config.DATA_DIR / "avatars" / f"{uid}.webp"
     if not path.exists():
         fail(404, "not_found")
@@ -184,11 +187,24 @@ def get_avatar(uid: int):
 # ---------- 公開資料 ----------
 
 @router.get("/api/users/{uid}")
-def get_user(uid: int, lang: str = Query(config.DEFAULT_LANG), conn: sqlite3.Connection = Depends(get_db)):
+def get_user(uid: int, lang: str = Query(config.DEFAULT_LANG), viewer=Depends(optional_user),
+             conn: sqlite3.Connection = Depends(get_db)):
     user = conn.execute("SELECT * FROM users WHERE uid = ?", (uid,)).fetchone()
     if user is None:
         fail(404, "user_not_found")
-    return profile(conn, user, lang)
+    out = profile(conn, user, lang)
+    if viewer is not None and viewer["uid"] == config.ADMIN_UID:
+        out["flagged"] = user["flagged_at"] is not None   # 只有管理員看得到
+    return out
+
+
+@router.delete("/api/admin/users/{uid}/flag")
+def clear_flag(uid: int, admin=Depends(admin_user), conn: sqlite3.Connection = Depends(get_db)):
+    """解除標記。次數仍超過上限的話，下次檢查會再標記。"""
+    if conn.execute("UPDATE users SET flagged_at = NULL WHERE uid = ?", (uid,)).rowcount == 0:
+        fail(404, "user_not_found")
+    print(f"[ADMIN] unflag uid={fmt_uid(uid)}", flush=True)
+    return {"status": "ok"}
 
 
 # ---------- 管理員：指定 UID 的顏色與稱號 ----------

@@ -94,8 +94,6 @@ button.link:disabled { color: var(--muted); }
 .avatar { border-radius: 50%; object-fit: cover; background: var(--panel-2); width: 96px; height: 96px; }
 .avatar.large { width: 160px; height: 160px; }
 
-.beta { font-size: 12px; font-weight: 600; color: var(--muted); }
-
 /* UID 與稱號：每個 UID 都有底色。一般使用者淺咖啡、管理員黃（和 server/app/titles.py TIER_COLORS 一致）；
    管理員指定的顏色由 app.js 直接寫在 style 上 */
 .uid-wrap { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -142,6 +140,14 @@ button.link:disabled { color: var(--muted); }
   color: var(--muted);
   overflow-wrap: anywhere;
 }
+
+.site-footer .version { font-size: 12px; opacity: .7; }
+
+/* 管理員：通知匣、被標記的帳號 */
+.notice-list { list-style: none; margin: 16px 0; padding: 0; width: min(720px, 100%); display: flex; flex-direction: column; gap: 10px; }
+.notice-list li { padding: 12px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow-wrap: anywhere; }
+.notice-list li.unread { border-color: var(--accent); }
+.flag-box { width: 100%; margin-top: 12px; padding: 12px 16px; border: 1px solid var(--error); border-radius: var(--radius); }
 
 /* 手機：提示可以安裝到桌面 */
 .install-hint {
@@ -244,9 +250,11 @@ body.zhi-on { overflow: hidden; }
   -webkit-text-stroke: 2px #2a1400;
   paint-order: stroke fill;
   text-shadow: 0 4px 0 #ff8a1f, 0 10px 32px #000a;
-  animation: zhi-breathe 1.4s ease-in-out infinite;
+  /* 晚 100ms 才出現：等門的圖先畫出來。每次重新顯示（display 變回來）動畫都會重跑 */
+  animation: zhi-show 1ms 100ms both, zhi-breathe 1.4s 100ms ease-in-out infinite;
 }
 .zhi-stage.playing .zhi-hint { display: none; }
+@keyframes zhi-show { from { opacity: 0; } to { opacity: 1; } }
 @keyframes zhi-breathe {
   0%, 100% { transform: translate(-50%, -50%) scale(1); }
   50% { transform: translate(-50%, -50%) scale(1.08); }
@@ -315,7 +323,8 @@ body.zhi-on { overflow: hidden; }
 }
 @media (prefers-reduced-motion: reduce) {
   .particle { display: none; }
-  .zhi-hint, .zhi-count.bump { animation: none; }
+  .zhi-hint { animation: zhi-show 1ms 100ms both; }
+  .zhi-count.bump { animation: none; }
 }
 
 .checkin-msg { font-size: 22px; font-weight: 700; margin: 0; }

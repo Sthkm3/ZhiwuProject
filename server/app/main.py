@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import mimetypes
 from contextlib import asynccontextmanager
@@ -7,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, card, checkin, config, db, share, submissions, users
+from . import __version__, anticheat, auth, card, checkin, config, db, notices, share, submissions, users
 
 # python:3.12-slim 沒有 /etc/mime.types，這些副檔名會被當成 text/plain；加上 nosniff 後瀏覽器可能拒絕播放
 for _type, _ext in (("image/webp", ".webp"), ("video/mp4", ".mp4"), ("audio/mp4", ".m4a"), ("application/manifest+json", ".webmanifest"),
@@ -26,7 +27,10 @@ async def lifespan(app: FastAPI):
               flush=True)
     else:
         print(f"[mail] {config.SMTP_USER}@{config.SMTP_HOST}:{config.SMTP_PORT}, from {config.MAIL_FROM}", flush=True)
+    await asyncio.to_thread(anticheat.check_safe)
+    task = asyncio.create_task(anticheat.loop())
     yield
+    task.cancel()
 
 
 app = FastAPI(title="吱鼯計畫", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
@@ -41,7 +45,13 @@ async def guard(request: Request, call_next):
             and request.headers.get("x-zhiwu") != "1"
             and not request.headers.get("authorization")):
         return JSONResponse({"detail": "csrf"}, status_code=403)
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as e:
+        # 未處理的錯誤（500）：記到管理員通知匣。只留路由和例外類型，不留參數內容
+        route = getattr(request.scope.get("route"), "path", "?")
+        await asyncio.to_thread(notices.add, "error", None, f"{request.method} {route}: {type(e).__name__}")
+        raise
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Content-Security-Policy", CSP)
@@ -52,8 +62,14 @@ async def guard(request: Request, call_next):
     return response
 
 
-for module in (auth, users, checkin, card, share, submissions):
+for module in (auth, users, checkin, card, share, submissions, notices):
     app.include_router(module.router)
+
+
+@app.exception_handler(OverflowError)
+def too_big(request: Request, exc: OverflowError):
+    # UID 或編號超過 SQLite 整數範圍：一定不存在
+    return JSONResponse({"detail": "not_found"}, status_code=404)
 
 
 @app.get("/healthz")
@@ -75,8 +91,7 @@ def asset_version() -> str:
 def index():
     html = (config.WEB_DIR / "index.html").read_text(encoding="utf-8")
     html = html.replace("__ASSET_VERSION__", asset_version())
-    html = html.replace("<!--BETA_TITLE-->", " (Beta)" if config.BETA else "")
-    html = html.replace("<!--BETA_BADGE-->", ' <small class="beta">(Beta)</small>' if config.BETA else "")
+    html = html.replace("<!--APP_VERSION-->", __version__)
     return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
@@ -89,4 +104,5 @@ app.add_api_route("/", index, methods=["GET", "HEAD"], include_in_schema=False)
 app.add_api_route("/u/{uid}", index, methods=["GET", "HEAD"], include_in_schema=False)
 app.add_api_route("/upload", index, methods=["GET", "HEAD"], include_in_schema=False)
 app.add_api_route("/review", index, methods=["GET", "HEAD"], include_in_schema=False)
+app.add_api_route("/notices", index, methods=["GET", "HEAD"], include_in_schema=False)
 app.mount("/assets", StaticFiles(directory=config.WEB_DIR, check_dir=False), name="assets")

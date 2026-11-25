@@ -105,5 +105,18 @@
   "install.android": "설치하면 매일 찍찍하기 편해요",
   "install.generic": "홈 화면에 추가하면 편해요: 브라우저 메뉴 →「홈 화면에 추가」",
   "install.button": "설치",
-  "install.close": "닫기"
+  "install.close": "닫기",
+  "nav.notices": "알림함 ({n})",
+  "notices.heading": "알림함",
+  "notices.empty": "알림이 없어요",
+  "notices.more": "더 보기",
+  "notice.flagged": "계정 표시됨: 찍찍 횟수가 이론상 한도를 넘었어요",
+  "notice.cooldown": "찍찍가 너무 잦아 쿨다운",
+  "notice.error": "서버 오류",
+  "notice.mail_failed": "인증 메일 전송 실패",
+  "notice.admin_locked": "관리자 로그인 잠김",
+  "flag.text": "이 계정은 표시되었어요: 찍찍 횟수가 이론상 한도를 넘었어요.",
+  "flag.clear": "표시 해제",
+  "flag.cleared": "표시를 해제했어요",
+  "err.cooldown": "너무 빨라요. 10초 쉬었다 하세요"
 }

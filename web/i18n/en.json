@@ -105,5 +105,18 @@
   "install.android": "Install the app for easier daily squeaks",
   "install.generic": "Add to your home screen: browser menu, then Add to Home screen",
   "install.button": "Install",
-  "install.close": "Close"
+  "install.close": "Close",
+  "nav.notices": "Notifications ({n})",
+  "notices.heading": "Notifications",
+  "notices.empty": "No notifications",
+  "notices.more": "Load more",
+  "notice.flagged": "Account flagged: click count is above the theoretical limit",
+  "notice.cooldown": "Too frequent, cooling down",
+  "notice.error": "Server error",
+  "notice.mail_failed": "Failed to send verification email",
+  "notice.admin_locked": "Admin sign-in locked",
+  "flag.text": "This account is flagged: its click count is above the theoretical limit.",
+  "flag.clear": "Remove flag",
+  "flag.cleared": "Flag removed",
+  "err.cooldown": "Too fast. Take a 10 second break"
 }

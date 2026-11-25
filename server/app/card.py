@@ -171,8 +171,7 @@ def draw(lang: str, meme: str | None, name: str, avatar: Image.Image | None, bad
     d.text((PAD, line_y + 148), sub, font=font(lang, 36), fill=MUTED)
 
     host = urlparse(config.PUBLIC_URL).netloc or config.PUBLIC_URL
-    footer = f"{host} · Beta" if config.BETA else host
-    d.text((W - PAD, H - PAD), footer, font=font("en", 30, True), fill=ACCENT, anchor="rs")
+    d.text((W - PAD, H - PAD), host, font=font("en", 30, True), fill=ACCENT, anchor="rs")
     return img
 
 
@@ -262,11 +261,11 @@ def guest_meme(code: str, day: str) -> str | None:
 
 @router.get("/card/guest.png")
 def get_guest_card(request: Request, code: str = "", n: str = "0", lang: str = config.DEFAULT_LANG):
-    if not GUEST_CODE_RE.match(code) or not n.isascii() or not n.isdigit() or int(n) > config.GUEST_CLICKS_MAX:
+    if not GUEST_CODE_RE.match(code) or len(n) > 7 or not n.isascii() or not n.isdigit() or int(n) > config.GUEST_CLICKS_MAX:
         fail(404, "not_found")
     clicks, lang, day = int(n), norm_lang(lang), clock.today()
     meme = guest_meme(code, day)
-    key = (code, clicks, lang, day, meme, CARD_VERSION, config.BETA)
+    key = (code, clicks, lang, day, meme, CARD_VERSION)
     with _guest_lock:
         png = _guest_cache.get(key)
         if png is None:

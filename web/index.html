@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>吱鼯計畫<!--BETA_TITLE--> — 你今天吱吱了嗎</title>
+<title>吱鼯計畫 — 你今天吱吱了嗎</title>
 <meta name="description" content="吱鼯計畫：你今天吱吱了嗎">
 <meta name="theme-color" content="#1a0f06">
 <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -19,7 +19,7 @@
 <div class="layout">
   <aside id="sidebar">
     <div class="brand">
-      <a href="/"><img class="logo" src="/assets/logo.png" alt="" width="32" height="32"><span class="brand-text"><b>吱鼯計畫<!--BETA_BADGE--></b><small data-i18n="site.tagline"></small></span></a>
+      <a href="/"><img class="logo" src="/assets/logo.png" alt="" width="32" height="32"><span class="brand-text"><b>吱鼯計畫</b><small data-i18n="site.tagline"></small></span></a>
       <button id="menu-toggle" class="icon-btn only-mobile" type="button" data-i18n-aria="menu">☰</button>
     </div>
 
@@ -55,6 +55,7 @@
           <a id="me-link" href="/" data-i18n="profile.view"></a>
           <a id="upload-link" href="/upload" data-i18n="nav.upload"></a>
           <a id="review-link" href="/review" hidden></a>
+          <a id="notices-link" href="/notices" hidden></a>
           <button type="button" class="link" id="edit-profile" data-i18n="profile.edit"></button>
           <button type="button" class="link" id="logout" data-i18n="auth.logout"></button>
         </nav>
@@ -145,6 +146,13 @@
       <p class="center-text muted" id="review-empty" data-i18n="review.empty" hidden></p>
     </section>
 
+    <section id="view-notices" hidden>
+      <h1 data-i18n="notices.heading"></h1>
+      <p class="hint" id="notices-empty" data-i18n="notices.empty" hidden></p>
+      <ul class="notice-list" id="notices-list"></ul>
+      <button type="button" id="notices-more" data-i18n="notices.more" hidden></button>
+    </section>
+
     <section id="view-user" hidden>
       <div id="user-card" class="profile" hidden>
         <img id="user-avatar" class="avatar large" alt="" width="160" height="160">
@@ -153,6 +161,11 @@
         <p class="stats" id="user-stats"></p>
         <div class="bio" id="user-bio"></div>
         <p class="hint" id="user-joined"></p>
+        <!-- 管理員才看得到：這個帳號的吱吱次數超過理論上限 -->
+        <div id="flag-box" class="flag-box" hidden>
+          <p class="error" data-i18n="flag.text"></p>
+          <button type="button" id="flag-clear" data-i18n="flag.clear"></button>
+        </div>
         <!-- 管理員才看得到：指定這個 UID 的顏色與稱號 -->
         <form id="title-form" class="title-form" hidden novalidate>
           <h2 data-i18n="title.heading"></h2>
@@ -179,7 +192,8 @@
 
     <footer class="site-footer">
       <span data-i18n="about.yuzumi"></span><br>
-      <a href="https://official-website.meridianproject.tw/talents/yuzumi" target="_blank" rel="noopener noreferrer">official-website.meridianproject.tw/talents/yuzumi</a>
+      <a href="https://official-website.meridianproject.tw/talents/yuzumi" target="_blank" rel="noopener noreferrer">official-website.meridianproject.tw/talents/yuzumi</a><br>
+      <span class="version">v<!--APP_VERSION--></span>
     </footer>
   </main>
 </div>

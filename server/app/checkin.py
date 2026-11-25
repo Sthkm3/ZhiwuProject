@@ -1,12 +1,14 @@
 import secrets
 import sqlite3
+import threading
 import time
+from collections import deque
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from . import clock, config
+from . import clock, config, notices
 from .db import get_db, transaction
 from .deps import current_user, fail
 from .i18n import t
@@ -100,17 +102,31 @@ def do_checkin(user=Depends(current_user), conn: sqlite3.Connection = Depends(ge
 # ---------- 繼續吱吱：只加點擊次數，和簽到天數無關 ----------
 
 _now = time.monotonic          # 測試會換掉
-_buckets: dict[int, tuple[float, float]] = {}   # uid -> (剩餘額度, 上次更新時間)
+_zhi_lock = threading.Lock()   # 端點跑在 threadpool，同時送多個請求也不能多算
+_next: dict[int, float] = {}       # uid -> 下一下的時間
+_rejects: dict[int, deque] = {}    # uid -> 最近被擋下的時間
+_cool: dict[int, float] = {}       # uid -> 冷靜到什麼時候
 
 
-def _take(uid: int, n: int) -> int:
-    """token bucket：回傳這次實際可以加幾下（超過速率的部分直接丟掉）。"""
-    now = _now()
-    tokens, last = _buckets.get(uid, (float(config.ZHI_BURST), now))
-    tokens = min(float(config.ZHI_BURST), tokens + (now - last) * config.ZHI_RATE)
-    ok = min(n, int(tokens))
-    _buckets[uid] = (tokens - ok, now)
-    return ok
+def _take(uid: int) -> tuple[str, bool]:
+    """回傳 (結果, 是不是剛進入冷靜)。結果：ok = 加 1 下 / early = 太快，這下不算 / cooldown = 冷靜中。"""
+    with _zhi_lock:
+        now = _now()
+        if now < _cool.get(uid, now):
+            return "cooldown", False
+        due = _next.get(uid, now)
+        if now >= due - config.ZHI_JITTER:
+            _next[uid] = max(now, due) + config.ZHI_GAP
+            return "ok", False
+        q = _rejects.setdefault(uid, deque())
+        while q and q[0] < now - config.COOL_WINDOW:
+            q.popleft()
+        q.append(now)
+        if len(q) < config.COOL_REJECTS:
+            return "early", False
+        q.clear()
+        _cool[uid] = now + config.COOL_SECONDS
+        return "cooldown", True
 
 
 class ZhiIn(BaseModel):
@@ -121,7 +137,12 @@ class ZhiIn(BaseModel):
 def do_zhi(body: ZhiIn, user=Depends(current_user), conn: sqlite3.Connection = Depends(get_db)):
     if not 1 <= body.n <= config.ZHI_BATCH_MAX:
         fail(400, "bad_request")
-    added = _take(user["uid"], body.n)
+    result, started = _take(user["uid"])
+    if started:
+        notices.add("cooldown", user["uid"])
+    if result == "cooldown":
+        fail(429, "cooldown")
+    added = int(result == "ok")
     if added:
         conn.execute("UPDATE users SET clicks = clicks + ? WHERE uid = ?", (added, user["uid"]))
     clicks = conn.execute("SELECT clicks FROM users WHERE uid = ?", (user["uid"],)).fetchone()[0]

@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app import auth, clock, config, mailer, totp
+from app import auth, checkin, clock, config, mailer, totp
 
 ADMIN_LOGIN = "sthkm3"
 ADMIN_TOTP = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"  # 測試用密鑰
@@ -46,6 +46,8 @@ def client(tmp_path, monkeypatch, fake_clock, sent):
     monkeypatch.setattr(config, "ADMIN_LOGIN", ADMIN_LOGIN)
     monkeypatch.setattr(config, "ADMIN_TOTP", ADMIN_TOTP)
     auth._ip_hits.clear()
+    for d in (checkin._next, checkin._rejects, checkin._cool):
+        d.clear()
     from app.main import app
     with TestClient(app, headers={"X-ZHIWU": "1"}) as c:
         yield c

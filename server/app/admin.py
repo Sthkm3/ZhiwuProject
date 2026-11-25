@@ -104,7 +104,7 @@ def cmd_totp_uri(args):
 
 
 def cmd_reset_progress(args):
-    """清空所有簽到紀錄與小卡（Beta 結束、正式上線時用）。帳號、UID、名稱、大頭貼、自介都保留。"""
+    """清空所有簽到紀錄與小卡。帳號、UID、名稱、大頭貼、自介都保留。"""
     conn = db.connect()
     checkins = conn.execute("SELECT COUNT(*) FROM checkins").fetchone()[0]
     users = conn.execute("SELECT COUNT(DISTINCT uid) FROM checkins").fetchone()[0]
@@ -117,7 +117,7 @@ def cmd_reset_progress(args):
     conn.backup(dst)
     dst.close()
     conn.execute("DELETE FROM checkins")
-    conn.execute("UPDATE users SET clicks = 0")
+    conn.execute("UPDATE users SET clicks = 0, flagged_at = NULL")
     shutil.rmtree(config.DATA_DIR / "cards", ignore_errors=True)
     (config.DATA_DIR / "cards").mkdir(exist_ok=True)
     print(f"完成。備份在 {backup}")

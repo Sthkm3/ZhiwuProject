@@ -105,5 +105,18 @@
   "install.android": "安装到桌面，每天吱吱更方便",
   "install.generic": "添加到主屏幕，每天吱吱更方便：浏览器菜单 →「添加到主屏幕」",
   "install.button": "安装",
-  "install.close": "关闭"
+  "install.close": "关闭",
+  "nav.notices": "通知箱（{n}）",
+  "notices.heading": "通知箱",
+  "notices.empty": "目前没有通知",
+  "notices.more": "加载更多",
+  "notice.flagged": "账号被标记：吱吱次数超过理论上限",
+  "notice.cooldown": "吱吱太频繁，进入冷静时间",
+  "notice.error": "服务器错误",
+  "notice.mail_failed": "验证邮件发送失败",
+  "notice.admin_locked": "管理员登录被锁定",
+  "flag.text": "这个账号被标记：吱吱次数超过理论上限。",
+  "flag.clear": "解除标记",
+  "flag.cleared": "已解除标记",
+  "err.cooldown": "吱太快了，冷静 10 秒再吱"
 }

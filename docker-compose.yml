@@ -14,7 +14,6 @@ services:
     environment:
       PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:2041}
       COOKIE_SECURE: ${COOKIE_SECURE:-0}
-      BETA: ${BETA:-0}           # 1 = 網頁標題與小卡標示 Beta
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
       SMTP_PORT: ${SMTP_PORT:-465}
       SMTP_USER: ${SMTP_USER:-}

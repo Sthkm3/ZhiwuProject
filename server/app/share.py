@@ -5,7 +5,7 @@ from html import escape
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
 
-from . import config
+from . import __version__, config
 from .card import DAY_RE
 from .checkin import stats
 from .db import get_db
@@ -47,7 +47,7 @@ PAGE = """<!DOCTYPE html>
 <body>
 <img src="{image_path}" alt="{title}">
 <a class="open" href="/">{open}</a>
-<footer>{about}<br><a href="https://official-website.meridianproject.tw/talents/yuzumi" target="_blank" rel="noopener noreferrer">official-website.meridianproject.tw/talents/yuzumi</a></footer>
+<footer>{about}<br><a href="https://official-website.meridianproject.tw/talents/yuzumi" target="_blank" rel="noopener noreferrer">official-website.meridianproject.tw/talents/yuzumi</a><br>v{version}</footer>
 </body>
 </html>"""
 
@@ -66,7 +66,7 @@ def share_page(uid: int, day: str, conn: sqlite3.Connection = Depends(get_db)):
     image_path = f"/card/{fmt_uid(uid)}/{day}.png?c={user['clicks']}"
     return PAGE.format(
         lang=lang,
-        site="吱鼯計畫 (Beta)" if config.BETA else "吱鼯計畫",
+        site="吱鼯計畫",
         title=escape(t(lang, "share.title", name=user["display_name"])),
         desc=escape(t(lang, "share.text", n=total)),
         image=escape(config.PUBLIC_URL + image_path),
@@ -74,4 +74,5 @@ def share_page(uid: int, day: str, conn: sqlite3.Connection = Depends(get_db)):
         url=escape(f"{config.PUBLIC_URL}/c/{fmt_uid(uid)}/{day}"),
         open=escape(t(lang, "share.open")),
         about=escape(t(lang, "about.yuzumi")),
+        version=__version__,
     )

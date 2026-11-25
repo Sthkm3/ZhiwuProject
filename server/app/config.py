@@ -31,8 +31,6 @@ WEB_DIR = Path(os.environ.get("WEB_DIR") or _default_web_dir())
 
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "http://127.0.0.1:2040").rstrip("/")
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
-# Beta 期間：網頁標題加 (Beta)、小卡右下角加 · Beta。正式上線設 BETA=0
-BETA = os.environ.get("BETA", "0") == "1"
 
 # 寄信用的 SMTP。預設 Gmail（帳號 + 應用程式密碼）；換成其他寄信服務只要改這幾個值
 SMTP_HOST = os.environ.get("SMTP_HOST") or "smtp.gmail.com"
@@ -74,10 +72,21 @@ SUBMIT_PER_DAY = 5
 SUBMIT_MAX_BYTES = 5 * 1024 * 1024    # 和大頭貼一樣，錯誤訊息寫的是 5MB
 SUBMIT_MAX_SIDE = 2048             # 長邊超過就等比例縮小
 
-# 繼續吱吱：一個帳號一秒只能吱一次（token bucket，額度最多存 1 下，所以兩下之間至少隔 1 秒）
-ZHI_BATCH_MAX = 200                # 一次請求的 n 上限（超過直接拒絕）；實際加幾下由下面兩個值決定
-ZHI_RATE = 1                       # 每秒補充幾下
-ZHI_BURST = 1                      # 最多累積幾下
+# 繼續吱吱：一個帳號平均每 1.5 秒只能吱一次
+ZHI_BATCH_MAX = 200                # 一次請求的 n 上限（超過直接拒絕）；不管 n 是多少，一次請求最多加 1 下
+ZHI_GAP = 1.5
+ZHI_JITTER = 0.3                   # 網路抖動時最多可以提早這麼多秒到，提早的會從下一下扣回來
+# 太頻繁：COOL_WINDOW 秒內被上面的限制擋下 COOL_REJECTS 次，就冷靜 COOL_SECONDS 秒
+COOL_REJECTS = 5
+COOL_WINDOW = 10
+COOL_SECONDS = 10
+
+# 反作弊：多久檢查一次吱吱次數有沒有超過理論上限（見 anticheat.py）
+CHECK_INTERVAL = 3600
+
+# 管理員通知匣：同樣的通知 NOTICE_MERGE 秒內併成一則，最多留 NOTICE_KEEP 則
+NOTICE_MERGE = 3600
+NOTICE_KEEP = 500
 
 # 訪客小卡：伺服器不存任何訪客資料，每次請求即時畫。畫一張要一點 CPU，所以依 IP 限流
 GUEST_CARD_LIMIT = 30              # 同一 IP 每分鐘最多畫幾張（從快取拿的不算）

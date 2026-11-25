@@ -2,7 +2,7 @@ import sqlite3
 import time
 from contextlib import contextmanager
 
-from . import config
+from . import clock, config
 
 # init() 檢查管理員設定後填入；False 時管理員登入完全停用
 admin_ok = False
@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
     clicks       INTEGER NOT NULL DEFAULT 0,   -- 吱吱（點擊）總次數，和簽到天數分開算
     title        TEXT NOT NULL DEFAULT '',     -- 管理員指定的稱號（空字串 = 沒有）
     title_color  TEXT NOT NULL DEFAULT '',     -- 管理員指定的 UID 底色 #rrggbb（空字串 = 沒有）
+    flagged_at   INTEGER,                      -- 吱吱次數超過理論上限，被標記的時間（NULL = 沒有）
     created_at   INTEGER NOT NULL
 );
 
@@ -63,6 +64,19 @@ CREATE TABLE IF NOT EXISTS submissions (
 );
 CREATE INDEX IF NOT EXISTS submissions_uid_day ON submissions(uid, day);
 CREATE INDEX IF NOT EXISTS submissions_status ON submissions(status, id);
+
+-- 管理員通知匣（notices.py）
+CREATE TABLE IF NOT EXISTS notices (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind       TEXT NOT NULL,
+    uid        INTEGER REFERENCES users(uid) ON DELETE SET NULL ON UPDATE CASCADE,
+    detail     TEXT NOT NULL DEFAULT '',
+    count      INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    read_at    INTEGER
+);
+CREATE INDEX IF NOT EXISTS notices_updated ON notices(updated_at);
 """
 
 
@@ -90,6 +104,9 @@ def init():
         conn.executescript(SCHEMA)
         conn.execute("INSERT OR IGNORE INTO meta(key, value) VALUES ('next_uid', 1)")
         _migrate(conn)
+        # 最初架設時間：只在第一次寫入。1.0.1 以前的資料庫沒有記，用最早的帳號建立時間補
+        conn.execute("INSERT OR IGNORE INTO meta(key, value) "
+                     "SELECT 'server_start', COALESCE(MIN(created_at), ?) FROM users", (clock.ts(),))
         _init_admin(conn)
     finally:
         conn.close()
@@ -100,6 +117,7 @@ _USER_COLUMNS = {
     "clicks": "INTEGER NOT NULL DEFAULT 0",
     "title": "TEXT NOT NULL DEFAULT ''",
     "title_color": "TEXT NOT NULL DEFAULT ''",
+    "flagged_at": "INTEGER",
 }
 
 

@@ -13,22 +13,9 @@ def test_uid_tier(uid, tier):
     assert uid_tier(uid) == tier
 
 
-@pytest.mark.parametrize("beta", [True, False])
-def test_beta_switch(client, sent, monkeypatch, beta):
-    monkeypatch.setattr(config, "BETA", beta)
-    html = client.get("/").text
-    assert ("(Beta)" in html) is beta
-    assert "<!--BETA" not in html
-    login(client, sent)
-    r = client.post("/api/checkin").json()
-    page = client.get(f"/c/00000001/{r['day']}").text
-    assert ('content="吱鼯計畫 (Beta)"' in page) is beta
-    assert client.get(r["card_url"]).status_code == 200
-
-
 def test_reset_progress(client, sent, capsys):
     login(client, sent)
-    client.patch("/api/me", json={"display_name": "Beta tester"})
+    client.patch("/api/me", json={"display_name": "Tester"})
     first = client.post("/api/checkin").json()
     assert client.get(first["card_url"]).status_code == 200
 
@@ -40,7 +27,7 @@ def test_reset_progress(client, sent, capsys):
     today = client.get("/api/checkin/today").json()
     assert today["total_days"] == 0 and today["checked_in"] is False
     me = client.get("/api/me").json()  # 帳號、名稱、session 都還在
-    assert me["display_name"] == "Beta tester" and me["uid_str"] == "00000001"
+    assert me["display_name"] == "Tester" and me["uid_str"] == "00000001"
     assert list(config.DATA_DIR.glob("zhiwu.db.bak-*"))
     assert not any((config.DATA_DIR / "cards").iterdir())
     # 同一天可以重新簽到

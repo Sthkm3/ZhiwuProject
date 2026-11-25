@@ -11,7 +11,8 @@ def frozen(monkeypatch):
     """固定限流用的時鐘，測試自己決定時間前進多少。"""
     now = [1000.0]
     monkeypatch.setattr(checkin, "_now", lambda: now[0])
-    checkin._buckets.clear()
+    for d in (checkin._next, checkin._rejects, checkin._cool):
+        d.clear()
     return now
 
 
@@ -33,7 +34,7 @@ def test_zhi_adds_clicks_but_not_days(client, sent, frozen):
     login(client, sent)
     client.post("/api/checkin")
     assert client.post("/api/zhi", json={"n": 1}).json() == {"clicks": 2, "added": 1}
-    frozen[0] += 1
+    frozen[0] += config.ZHI_GAP
     assert client.post("/api/zhi", json={}).json()["clicks"] == 3   # 預設一下
     today = client.get("/api/checkin/today").json()
     assert today["clicks"] == 3 and today["total_days"] == 1 and today["streak"] == 1
@@ -58,19 +59,28 @@ def test_zhi_rejects_bad_batch(client, sent, frozen, n):
     assert client.get("/api/me").json()["clicks"] == 0
 
 
-def test_zhi_once_per_second(client, sent, frozen):
-    """一個帳號一秒只能吱一次：同一秒內多的、一次送很多下的，都只算一下。"""
+def test_zhi_once_per_gap(client, sent, frozen):
+    """一個帳號 1.5 秒只能吱一次：太快的、一次送很多下的，都只算一下。"""
     login(client, sent)
     assert client.post("/api/zhi", json={"n": 1}).json() == {"clicks": 1, "added": 1}
     assert client.post("/api/zhi", json={"n": 1}).json() == {"clicks": 1, "added": 0}
-    frozen[0] += 0.9
+    frozen[0] += 1.1
     assert client.post("/api/zhi", json={"n": 1}).json() == {"clicks": 1, "added": 0}
-    frozen[0] += 0.1
+    frozen[0] += 0.4
     assert client.post("/api/zhi", json={"n": 1}).json() == {"clicks": 2, "added": 1}
-    # 等再久額度也只存 1 下；一次送 200 下也只加 1
+    # 等再久也不會累積；一次送 200 下也只加 1
     frozen[0] += 3600
     assert client.post("/api/zhi", json={"n": 200}).json() == {"clicks": 3, "added": 1}
     assert client.post("/api/zhi", json={"n": 200}).json() == {"clicks": 3, "added": 0}
+
+
+def test_zhi_jitter_does_not_raise_average(frozen):
+    """可以提早 0.3 秒，但提早的會扣回來：長期平均還是 1.5 秒一下。"""
+    ok = 0
+    for _ in range(1000):
+        frozen[0] += 1.25
+        ok += checkin._take(1)[0] == "ok"
+    assert ok <= 1250 / config.ZHI_GAP + 1
 
 
 def test_zhi_limit_is_per_account(client, sent, frozen):
