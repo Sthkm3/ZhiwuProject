@@ -118,5 +118,8 @@
   "flag.text": "This account is flagged: its click count is above the theoretical limit.",
   "flag.clear": "Remove flag",
   "flag.cleared": "Flag removed",
-  "err.cooldown": "Too fast. Take a 10 second break"
+  "err.cooldown": "Too fast. Take a 10 second break",
+  "err.too_frequent": "Too many attempts. Please try again later",
+  "notice.admin_login": "Admin signed in",
+  "notice.mail_limit": "Site-wide email limit reached"
 }

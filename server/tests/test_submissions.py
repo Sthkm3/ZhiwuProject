@@ -4,7 +4,7 @@ from PIL import Image
 
 from app import admin, checkin, config, db
 
-from .conftest import ADMIN_LOGIN, admin_code, login
+from .conftest import admin_code, admin_verify, login
 
 
 def _img(fmt="PNG", color=(10, 200, 30), size=(300, 200), **kw):
@@ -23,7 +23,7 @@ def upload(client, token, data=None, name="a.png"):
 
 
 def admin_token(client, fake_clock):
-    r = client.post("/api/auth/verify", json={"email": ADMIN_LOGIN, "code": admin_code(fake_clock)})
+    r = admin_verify(client, admin_code(fake_clock))
     assert r.status_code == 200, r.text
     return r.json()["token"]
 

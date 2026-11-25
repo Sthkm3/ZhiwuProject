@@ -4,9 +4,9 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app import auth, checkin, clock, config, mailer, totp
+from app import auth, checkin, clock, config, db, limits, mailer, totp
 
-ADMIN_LOGIN = "sthkm3"
+ADMIN_LOGIN = "boss-7f3a@admin.invalid"
 ADMIN_TOTP = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"  # 測試用密鑰
 
 
@@ -45,7 +45,8 @@ def client(tmp_path, monkeypatch, fake_clock, sent):
     monkeypatch.setattr(config, "MEME_DIR", memes)
     monkeypatch.setattr(config, "ADMIN_LOGIN", ADMIN_LOGIN)
     monkeypatch.setattr(config, "ADMIN_TOTP", ADMIN_TOTP)
-    auth._ip_hits.clear()
+    for w in limits.Window._all:
+        w.clear()
     for d in (checkin._next, checkin._rejects, checkin._cool):
         d.clear()
     from app.main import app
@@ -59,6 +60,17 @@ def login(client, sent, email="a@example.com", lang="zh-TW"):
     r = client.post("/api/auth/verify", json={"email": email, "code": sent[email.lower()], "lang": lang})
     assert r.status_code == 200, r.text
     return r.json()
+
+
+def admin_verify(client, code, email=ADMIN_LOGIN, headers=None):
+    """管理員登入：和一般人一樣要先要驗證碼（這裡略過 60 秒限制），再輸入 TOTP。"""
+    conn = db.connect()
+    conn.execute("DELETE FROM login_codes WHERE email = ?", (email,))
+    conn.close()
+    auth._ip_mail.clear()
+    r = client.post("/api/auth/request-code", json={"email": email})
+    assert r.status_code == 200, r.text
+    return client.post("/api/auth/verify", json={"email": email, "code": code}, headers=headers)
 
 
 def admin_code(fake_clock, offset_steps=0):

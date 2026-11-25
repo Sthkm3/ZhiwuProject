@@ -7,22 +7,26 @@ import pytest
 
 from app import __version__, anticheat, card, checkin, config, db, mailer, notices, users
 
-from .conftest import ADMIN_LOGIN, admin_code, login
+from .conftest import admin_code, admin_verify, login
 from .test_zhi import frozen  # noqa: F401  （fixture）
 
 
 def as_admin(client, fake_clock):
     client.cookies.clear()
-    r = client.post("/api/auth/verify", json={"email": ADMIN_LOGIN, "code": admin_code(fake_clock)})
+    r = admin_verify(client, admin_code(fake_clock))
     assert r.status_code == 200, r.text
+    forget_login()
 
 
 def zhi(client):
     return client.post("/api/zhi", json={"n": 1})
 
 
-def kinds(client):
-    return [n["kind"] for n in client.get("/api/admin/notices").json()["items"]]
+def forget_login():
+    """管理員登入本身也會發一則通知，測其他通知時先拿掉。"""
+    conn = db.connect()
+    conn.execute("DELETE FROM notices WHERE kind = 'admin_login'")
+    conn.close()
 
 
 # ---------- 冷靜時間 ----------
@@ -151,7 +155,7 @@ def test_error_mail_and_lock_notices(client, sent, fake_clock, monkeypatch):
     monkeypatch.setattr(mailer, "send_code", boom)
     assert client.post("/api/auth/request-code", json={"email": "a@example.com"}).status_code == 502
     for _ in range(config.ADMIN_MAX_FAILS):
-        client.post("/api/auth/verify", json={"email": ADMIN_LOGIN, "code": "abc"})
+        admin_verify(client, "abc")
     monkeypatch.setattr(users, "render_md", boom)
     with pytest.raises(RuntimeError):
         client.get("/api/users/0")

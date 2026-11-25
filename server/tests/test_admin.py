@@ -4,11 +4,11 @@ import pytest
 
 from app import admin, config, db, totp
 
-from .conftest import ADMIN_LOGIN, admin_code, login
+from .conftest import ADMIN_LOGIN, admin_code, admin_verify, login
 
 
 def admin_login(client, code, login_name=ADMIN_LOGIN):
-    return client.post("/api/auth/verify", json={"email": login_name, "code": code})
+    return admin_verify(client, code, login_name)
 
 
 def test_totp_rfc6238_vector():
@@ -23,7 +23,7 @@ def test_totp_rfc6238_vector():
 
 
 def test_admin_request_code_does_not_send(client, sent):
-    r = client.post("/api/auth/request-code", json={"email": "STHKM3"})
+    r = client.post("/api/auth/request-code", json={"email": ADMIN_LOGIN.upper()})
     assert r.status_code == 200 and r.json()["status"] == "sent"
     assert sent == {}
 
@@ -64,10 +64,10 @@ def test_admin_lockout(client, fake_clock):
     wrong = "000000" if good != "000000" else "111111"
     assert admin_login(client, wrong).json()["detail"] == "wrong_code"
     assert admin_login(client, wrong).json()["detail"] == "wrong_code"
-    r = admin_login(client, wrong)  # 第 3 次就鎖
-    assert r.status_code == 429
+    assert admin_login(client, wrong).json()["detail"] == "wrong_code"
+    assert db.get_meta(db.connect(), "admin_lock_level") == 1    # 第 3 次就鎖，但回應看不出來
     # 鎖定中，正確的碼也不行
-    assert admin_login(client, good).status_code == 429
+    assert admin_login(client, good).json()["detail"] == "wrong_code"
 
     # 15 分鐘後解鎖
     fake_clock.value += timedelta(minutes=15)
@@ -79,7 +79,7 @@ def test_admin_lock_doubles(client, fake_clock):
         for _ in range(3):
             admin_login(client, "000000" if admin_code(fake_clock) != "000000" else "111111")
         fake_clock.value += timedelta(minutes=minutes) - timedelta(seconds=1)
-        assert admin_login(client, admin_code(fake_clock)).status_code == 429
+        assert admin_login(client, admin_code(fake_clock)).status_code == 400
         fake_clock.value += timedelta(seconds=1)
     conn = db.connect()
     assert db.get_meta(conn, "admin_lock_level") == 3
@@ -88,7 +88,7 @@ def test_admin_lock_doubles(client, fake_clock):
 def test_admin_unlock_command(client, fake_clock):
     for _ in range(3):
         admin_login(client, "000000" if admin_code(fake_clock) != "000000" else "111111")
-    assert admin_login(client, admin_code(fake_clock)).status_code == 429
+    assert admin_login(client, admin_code(fake_clock)).status_code == 400
     admin.main(["unlock"])
     assert admin_login(client, admin_code(fake_clock)).status_code == 200
 
@@ -96,16 +96,15 @@ def test_admin_unlock_command(client, fake_clock):
 def test_admin_disabled_without_secret(client, sent, fake_clock, monkeypatch):
     monkeypatch.setattr(config, "ADMIN_TOTP", "")
     db.init()
-    r = client.post("/api/auth/request-code", json={"email": ADMIN_LOGIN})
-    assert r.status_code == 400 and r.json()["detail"] == "invalid_email"
-    assert admin_login(client, admin_code(fake_clock)).json()["detail"] == "invalid_email"
+    assert admin_login(client, admin_code(fake_clock)).json()["detail"] == "wrong_code"
+    assert sent == {}
 
 
 def test_admin_login_renamed(client, fake_clock, monkeypatch):
-    monkeypatch.setattr(config, "ADMIN_LOGIN", "boss")
+    monkeypatch.setattr(config, "ADMIN_LOGIN", "Boss2@admin.invalid")
     db.init()
-    assert admin_login(client, admin_code(fake_clock), "sthkm3").json()["detail"] == "invalid_email"
-    r = admin_login(client, admin_code(fake_clock), "boss")
+    assert admin_login(client, admin_code(fake_clock)).json()["detail"] == "wrong_code"   # 舊的變成一般信箱
+    r = admin_login(client, admin_code(fake_clock), "boss2@admin.invalid")
     assert r.status_code == 200 and r.json()["user"]["uid"] == 0
 
 
@@ -119,7 +118,7 @@ def test_admin_login_clash_disables(client, sent, fake_clock, monkeypatch):
 def test_totp_uri(capsys, client):
     admin.main(["totp-uri"])
     last = capsys.readouterr().out.strip().splitlines()[-1]
-    assert last.startswith("otpauth://totp/%E5%90%B1%E9%BC%AF%E8%A8%88%E7%95%AB%3Asthkm3?secret=")
+    assert last.startswith("otpauth://totp/%E5%90%B1%E9%BC%AF%E8%A8%88%E7%95%AB%3Aboss-7f3a%40admin.invalid?secret=")
 
 
 @pytest.mark.parametrize("uid", ["0", "-1"])

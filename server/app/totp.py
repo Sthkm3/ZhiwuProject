@@ -23,7 +23,7 @@ def code_at(key: bytes, step: int) -> str:
 
 def verify(secret: str, code: str, unix_time: int, window: int = 1) -> int | None:
     """比對前後各 window 個時間窗（容忍手機時鐘誤差），成功回傳符合的時間步。"""
-    if len(code) != DIGITS or not code.isdigit():
+    if len(code) != DIGITS or not code.isascii() or not code.isdigit():
         return None
     key = decode_secret(secret)
     current = unix_time // PERIOD

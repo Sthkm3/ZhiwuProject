@@ -1,18 +1,18 @@
 """信箱驗證碼登入（沒有密碼）：第一次驗證成功就自動建立帳號。
 
 管理員：信箱欄輸入 ADMIN_LOGIN，驗證碼是 Aegis 算的 TOTP（不寄信）。錯 3 次就全域鎖定，時間逐次加倍。
+對外的回應和一般信箱完全相同（包括鎖定時），別人沒辦法從回應試出哪個是管理員。
 """
-import re
+import random
 import secrets
 import sqlite3
-import threading
 import time
-from collections import defaultdict, deque
+from collections import deque
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
-from . import clock, config, db, mailer, notices, totp
+from . import clock, config, db, limits, mailer, notices, totp
 from .db import get_db, get_meta, set_meta, transaction
 from .deps import client_ip, current_user, fail, session_token, sha256
 from .i18n import norm_lang
@@ -20,34 +20,31 @@ from .users import create_user, profile
 
 router = APIRouter()
 
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
-# 同一 IP 的寄信次數（單一 worker，放記憶體就夠）
-_ip_hits: dict[str, deque] = defaultdict(deque)
-_ip_lock = threading.Lock()
-
-
-def ip_allowed(ip: str) -> bool:
-    now = time.monotonic()
-    with _ip_lock:
-        q = _ip_hits[ip]
-        while q and q[0] < now - config.IP_WINDOW:
-            q.popleft()
-        if len(q) >= config.IP_LIMIT:
-            return False
-        q.append(now)
-        return True
+_ip_mail = limits.Window("IP_LIMIT", "IP_WINDOW")              # 同一 IP 的寄信次數
+_all_mail = limits.Window("MAIL_LIMIT", "MAIL_WINDOW")         # 全站的寄信次數
+_day_mail = limits.Window("MAIL_DAY_LIMIT", "MAIL_DAY_WINDOW")
+_send_times: deque = deque(maxlen=20)   # 最近實際寄信花的秒數；管理員不寄信，用它等差不多久
 
 
-def is_admin_login(raw: str) -> bool:
-    return db.admin_ok and raw.strip().lower() == config.ADMIN_LOGIN.lower()
+def is_admin(conn: sqlite3.Connection, email: str) -> bool:
+    """管理員的信箱。就算管理員登入停用了也算：不能寄信給它，也不能用一般流程登入。"""
+    row = conn.execute("SELECT uid FROM users WHERE email = ?", (email,)).fetchone()
+    return row is not None and row["uid"] == config.ADMIN_UID
 
 
 def norm_email(email: str) -> str:
     email = email.strip().lower()
-    if len(email) > 254 or not EMAIL_RE.match(email):
+    if not limits.valid_email(email):
         fail(400, "invalid_email")
     return email
+
+
+def mail_allowed() -> bool:
+    for window, name in ((_day_mail, "24 h"), (_all_mail, "10 min")):
+        if not window.allow("all"):
+            notices.add("mail_limit", None, name)
+            return False
+    return True
 
 
 class CodeRequest(BaseModel):
@@ -64,12 +61,6 @@ class VerifyRequest(BaseModel):
 @router.post("/api/auth/request-code")
 def request_code(body: CodeRequest, request: Request, conn: sqlite3.Connection = Depends(get_db)):
     sent = {"status": "sent", "expires_in": config.CODE_TTL, "resend_in": config.CODE_RESEND}
-    if is_admin_login(body.email):
-        # 管理員不寄信，驗證碼看 Aegis。回應和一般信箱完全相同
-        if not ip_allowed(client_ip(request)):
-            fail(429, "too_many_requests")
-        return sent
-
     email = norm_email(body.email)
     now = clock.ts()
     conn.execute("DELETE FROM login_codes WHERE expires_at < ?", (now,))
@@ -77,7 +68,7 @@ def request_code(body: CodeRequest, request: Request, conn: sqlite3.Connection =
     old = conn.execute("SELECT last_sent_at FROM login_codes WHERE email = ?", (email,)).fetchone()
     if old and now - old["last_sent_at"] < config.CODE_RESEND:
         fail(429, "too_many_requests")
-    if not ip_allowed(client_ip(request)):
+    if not _ip_mail.allow(limits.ip_key(client_ip(request))) or not mail_allowed():
         fail(429, "too_many_requests")
 
     # secrets 才是密碼學安全的亂數
@@ -88,8 +79,15 @@ def request_code(body: CodeRequest, request: Request, conn: sqlite3.Connection =
         "expires_at = excluded.expires_at, last_sent_at = excluded.last_sent_at",
         (email, sha256(code), now + config.CODE_TTL, now),
     )
+    if is_admin(conn, email):
+        # 管理員不寄信，驗證碼看 Aegis。等一段和實際寄信差不多的時間，從快慢也看不出來
+        if config.SMTP_USER and config.SMTP_PASSWORD:
+            time.sleep((random.choice(_send_times) if _send_times else 1.5) * random.uniform(0.9, 1.1))
+        return sent
+    started = time.monotonic()
     try:
         mailer.send_code(email, code, norm_lang(body.lang))
+        _send_times.append(time.monotonic() - started)
     except Exception as e:
         print("Error sending email:", e, flush=True)
         conn.execute("DELETE FROM login_codes WHERE email = ?", (email,))
@@ -151,13 +149,6 @@ def issue_session(conn: sqlite3.Connection, response: Response, user: sqlite3.Ro
 @router.post("/api/auth/verify")
 def verify(body: VerifyRequest, request: Request, response: Response,
            conn: sqlite3.Connection = Depends(get_db)):
-    if is_admin_login(body.email):
-        err = admin_check(conn, body.code.strip(), client_ip(request))
-        if err:
-            fail(429 if err == "too_many_requests" else 400, err)
-        admin = conn.execute("SELECT * FROM users WHERE uid = ?", (config.ADMIN_UID,)).fetchone()
-        return issue_session(conn, response, admin)
-
     email = norm_email(body.email)
     code = body.code.strip()
     now = clock.ts()
@@ -169,18 +160,41 @@ def verify(body: VerifyRequest, request: Request, response: Response,
         conn.execute("DELETE FROM login_codes WHERE email = ?", (email,))
         fail(400, "expired")
 
+    # 先用掉一次機會再比對（一句 SQL，同時送很多個也不會多猜）。認 code_hash：不會扣到剛重寄的新碼
+    this_code = (email, row["code_hash"])
+    used = conn.execute("UPDATE login_codes SET attempts = attempts + 1 "
+                        "WHERE email = ? AND code_hash = ? AND attempts < ? RETURNING attempts",
+                        (*this_code, config.CODE_MAX_ATTEMPTS)).fetchall()
+    if not used:
+        fail(400, "expired")
+
+    admin = is_admin(conn, email)
+    if admin:
+        # 停用時一律不對；鎖定中也只當作碼錯了，不透露這是管理員
+        err = admin_check(conn, code, client_ip(request)) if db.admin_ok else "wrong_code"
+        if err == "code_used":   # 碼是對的，只是用過了：不算猜錯
+            conn.execute("UPDATE login_codes SET attempts = attempts - 1 WHERE email = ? AND code_hash = ?", this_code)
+            fail(400, err)
+        ok = err is None
+    else:
+        ok = code.isascii() and secrets.compare_digest(sha256(code), row["code_hash"])
+
     # 錯太多次直接作廢，防止暴力猜碼
-    if not secrets.compare_digest(sha256(code), row["code_hash"]):
-        attempts = row["attempts"] + 1
-        if attempts >= config.CODE_MAX_ATTEMPTS:
-            conn.execute("DELETE FROM login_codes WHERE email = ?", (email,))
+    if not ok:
+        if used[0]["attempts"] >= config.CODE_MAX_ATTEMPTS:
+            conn.execute("DELETE FROM login_codes WHERE email = ? AND code_hash = ?", this_code)
             fail(400, "expired")
-        conn.execute("UPDATE login_codes SET attempts = ? WHERE email = ?", (attempts, email))
         fail(400, "wrong_code")
 
-    # 驗證碼只能用一次
-    conn.execute("DELETE FROM login_codes WHERE email = ?", (email,))
+    # 驗證碼只能用一次（同時送兩個對的，只有一個成功）
+    if conn.execute("DELETE FROM login_codes WHERE email = ? AND code_hash = ?", this_code).rowcount == 0:
+        fail(400, "not_requested")
     user = create_user(conn, email, body.lang)
+    if admin:
+        agent = "".join(ch for ch in request.headers.get("user-agent", "") if ch.isprintable())[:160]
+        country = request.headers.get("cf-ipcountry", "")[:8]
+        notices.add("admin_login", None, " · ".join(x for x in (client_ip(request)[:64], country, agent) if x),
+                    merge=False)
     return issue_session(conn, response, user)
 
 

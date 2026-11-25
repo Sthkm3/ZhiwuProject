@@ -131,11 +131,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
 def _init_admin(conn: sqlite3.Connection) -> None:
     """建立或更新管理員帳號（uid 0）。改了 ADMIN_LOGIN 重啟就會生效。"""
     global admin_ok
-    from . import totp
+    from . import limits, totp
 
     admin_ok = False
     login, secret = config.ADMIN_LOGIN, config.ADMIN_TOTP
     if not login or not secret:
+        return
+    if not limits.valid_email(login):
+        print("[ERROR] ADMIN_LOGIN 要是信箱格式（例如 name@example.com，不會真的寄信），管理員登入停用", flush=True)
         return
     try:
         if len(totp.decode_secret(secret)) < 10:

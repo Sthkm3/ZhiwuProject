@@ -10,8 +10,7 @@ import shutil
 import sqlite3
 import tempfile
 import threading
-import time
-from collections import OrderedDict, defaultdict, deque
+from collections import OrderedDict
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
@@ -20,14 +19,13 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse, Response
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-from . import clock, config
+from . import clock, config, limits
 from .checkin import list_memes, stats
 from .db import get_db
 from .deps import client_ip, fail
 from .i18n import norm_lang, t
+from .images import FORMATS
 from .titles import badge_colors, fmt_uid
-
-Image.MAX_IMAGE_PIXELS = 40_000_000  # 擋解壓縮炸彈
 
 router = APIRouter()
 
@@ -90,7 +88,7 @@ def rounded_mask(size, radius) -> Image.Image:
 
 def load_image(path: Path) -> Image.Image | None:
     try:
-        with Image.open(path) as im:
+        with Image.open(path, formats=FORMATS) as im:
             im.seek(0)  # gif 只取第一幀
             im = ImageOps.exif_transpose(im)
             return im.convert("RGB")
@@ -238,19 +236,8 @@ def get_card(uid: int, day: str, conn: sqlite3.Connection = Depends(get_db)):
 
 GUEST_CODE_RE = re.compile(r"^[A-Z0-9]{4}$")
 _guest_lock = threading.Lock()
-_guest_hits: dict[str, deque] = defaultdict(deque)       # IP -> 最近畫圖的時間
+_guest_hits = limits.Window("GUEST_CARD_LIMIT", "GUEST_CARD_WINDOW")
 _guest_cache: "OrderedDict[tuple, bytes]" = OrderedDict()  # 最近畫過的幾張（PNG）
-
-
-def _guest_allowed(ip: str) -> bool:
-    now = time.monotonic()
-    q = _guest_hits[ip]
-    while q and q[0] < now - config.GUEST_CARD_WINDOW:
-        q.popleft()
-    if len(q) >= config.GUEST_CARD_LIMIT:
-        return False
-    q.append(now)
-    return True
 
 
 def guest_meme(code: str, day: str) -> str | None:
@@ -269,7 +256,7 @@ def get_guest_card(request: Request, code: str = "", n: str = "0", lang: str = c
     with _guest_lock:
         png = _guest_cache.get(key)
         if png is None:
-            if not _guest_allowed(client_ip(request)):
+            if not _guest_hits.allow(limits.ip_key(client_ip(request))):
                 fail(429, "too_many_requests")
             buf = io.BytesIO()
             render_guest(lang, code, day, meme, clicks).save(buf, "PNG")

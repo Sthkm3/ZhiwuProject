@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import mimetypes
+import os
 from contextlib import asynccontextmanager
 from functools import lru_cache
 
@@ -8,7 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__, anticheat, auth, card, checkin, config, db, notices, share, submissions, users
+from . import __version__, anticheat, auth, card, checkin, config, db, limits, notices, share, submissions, users
 
 # python:3.12-slim 沒有 /etc/mime.types，這些副檔名會被當成 text/plain；加上 nosniff 後瀏覽器可能拒絕播放
 for _type, _ext in (("image/webp", ".webp"), ("video/mp4", ".mp4"), ("audio/mp4", ".m4a"), ("application/manifest+json", ".webmanifest"),
@@ -19,8 +20,25 @@ CSP = ("default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-
        "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 
 
+def check_storage() -> None:
+    """容器不是用 root 跑：資料夾的擁有者不對時，啟動就講清楚。"""
+    who = f"{os.geteuid()}:{os.getegid()}" if hasattr(os, "geteuid") else "?"
+
+    def bad(path):
+        return path.exists() and not os.access(path, os.R_OK | os.W_OK | (os.X_OK if path.is_dir() else 0))
+
+    data = config.DATA_DIR
+    paths = (data, *(data / n for n in ("zhiwu.db", "zhiwu.db-wal", "zhiwu.db-shm", "avatars", "cards", "submissions")))
+    for p in paths:
+        if bad(p):
+            raise RuntimeError(f"{p} 不能讀寫。目前用 UID:GID {who} 執行，請先 chown -R {who} 掛到 /data 的資料夾")
+    if bad(config.MEME_DIR):
+        print(f"[WARN] {config.MEME_DIR} 不能讀寫，圖庫或投稿會失敗。請 chown -R {who} 掛到 /memes 的資料夾", flush=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    check_storage()
     db.init()
     if not config.SMTP_USER or not config.SMTP_PASSWORD:
         print("[WARN] SMTP_USER / SMTP_PASSWORD 沒有設定：不會寄信，驗證碼只印在 log（[DEV] verify code ...）",
@@ -41,7 +59,7 @@ async def guard(request: Request, call_next):
     # 防 CSRF：會改資料的 /api 請求要帶 X-ZHIWU: 1（跨站表單帶不了自訂 header）。
     # 用 Bearer token 的客戶端（Android）沒有 cookie，不受 CSRF 影響，所以不檢查。
     if (request.method in ("POST", "PUT", "PATCH", "DELETE")
-            and request.url.path.startswith("/api/")
+            and request.scope["path"].startswith("/api/")
             and request.headers.get("x-zhiwu") != "1"
             and not request.headers.get("authorization")):
         return JSONResponse({"detail": "csrf"}, status_code=403)
@@ -55,12 +73,14 @@ async def guard(request: Request, call_next):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Content-Security-Policy", CSP)
-    if request.url.path.startswith("/assets/"):
+    if request.scope["path"].startswith("/assets/"):
         # 沒有這行時 Cloudflare 會自己快取 .js / .css，改版後使用者拿到舊檔。
         # no-cache = 每次向伺服器確認，沒變就回 304
         response.headers.setdefault("Cache-Control", "no-cache")
     return response
 
+
+app.add_middleware(limits.BodyLimit)   # 最後加的在最外層
 
 for module in (auth, users, checkin, card, share, submissions, notices):
     app.include_router(module.router)

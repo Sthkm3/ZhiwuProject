@@ -5,7 +5,7 @@
 """
 import asyncio
 
-from . import clock, config, db, notices
+from . import clock, config, db, limits, notices
 from .titles import fmt_uid
 
 
@@ -42,3 +42,4 @@ async def loop() -> None:
     while True:
         await asyncio.sleep(config.CHECK_INTERVAL)
         await asyncio.to_thread(check_safe)
+        limits.sweep_all()   # 順便清掉過期的限流紀錄

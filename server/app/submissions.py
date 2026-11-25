@@ -15,9 +15,9 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import FileResponse
-from PIL import Image, ImageOps
+from PIL import Image
 
-from . import clock, config
+from . import clock, config, images, limits
 from .db import get_db, transaction
 from .deps import admin_user, current_user, fail
 from .titles import badge, fmt_uid
@@ -39,15 +39,7 @@ def pending_path(row: sqlite3.Row) -> Path:
 
 def process_meme(data: bytes) -> tuple[bytes, str]:
     """重新編碼成 JPEG（有透明度就用 PNG）：去掉 EXIF（含 GPS）和偽裝成圖片的內容，GIF 只取第一格。"""
-    try:
-        with Image.open(io.BytesIO(data)) as im:
-            im.seek(0)
-            im.load()
-            im = ImageOps.exif_transpose(im)
-            has_alpha = im.mode in ("RGBA", "LA", "PA") or (im.mode == "P" and "transparency" in im.info)
-            im = im.convert("RGBA" if has_alpha else "RGB")
-    except Exception:
-        fail(400, "invalid_image")
+    im, has_alpha = images.decode(data)
     if max(im.size) > config.SUBMIT_MAX_SIDE:
         im.thumbnail((config.SUBMIT_MAX_SIDE, config.SUBMIT_MAX_SIDE), Image.LANCZOS)
     out = io.BytesIO()
@@ -104,12 +96,18 @@ def pending_count(conn: sqlite3.Connection) -> int:
 
 # ---------- 使用者 ----------
 
+_upload_hits = limits.Window("SUBMIT_LIMIT", "UPLOAD_WINDOW")
+
+
 @router.post("/api/submissions")
 def upload(file: UploadFile = File(...), user=Depends(current_user), conn: sqlite3.Connection = Depends(get_db)):
+    if not _upload_hits.allow(user["uid"]):
+        fail(429, "too_frequent")
     data = file.file.read(config.SUBMIT_MAX_BYTES + 1)
     if len(data) > config.SUBMIT_MAX_BYTES:
         fail(413, "file_too_large")
-    body, ext = process_meme(data)  # 先處理圖片，不佔用寫入鎖
+    with images.slot():
+        body, ext = process_meme(data)  # 先處理圖片，不佔用寫入鎖
     day = clock.today()
     submission_dir().mkdir(parents=True, exist_ok=True)
     # BEGIN IMMEDIATE：同時上傳好幾張也不會超過額度；寫檔失敗會連同 INSERT 一起還原

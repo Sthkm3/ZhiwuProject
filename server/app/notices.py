@@ -18,8 +18,8 @@ router = APIRouter()
 PAGE_SIZE = 50
 
 
-def add(kind: str, uid: int | None = None, detail: str = "") -> None:
-    """自己開一條連線；不要在交易裡呼叫（會等自己的寫入鎖）。"""
+def add(kind: str, uid: int | None = None, detail: str = "", merge: bool = True) -> None:
+    """自己開一條連線；不要在交易裡呼叫（會等自己的寫入鎖）。merge=False = 每次都是新的一則。"""
     try:
         conn = db.connect()
         try:
@@ -28,8 +28,8 @@ def add(kind: str, uid: int | None = None, detail: str = "") -> None:
                 cur = conn.execute(
                     "UPDATE notices SET count = count + 1, updated_at = ?, read_at = NULL "
                     "WHERE kind = ? AND uid IS ? AND detail = ? AND updated_at > ?",
-                    (now, kind, uid, detail, now - config.NOTICE_MERGE))
-                if cur.rowcount == 0:
+                    (now, kind, uid, detail, now - config.NOTICE_MERGE)) if merge else None
+                if cur is None or cur.rowcount == 0:
                     conn.execute(
                         "INSERT INTO notices(kind, uid, detail, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
                         (kind, uid, detail, now, now))

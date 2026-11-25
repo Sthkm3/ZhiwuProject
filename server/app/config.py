@@ -51,7 +51,26 @@ IP_WINDOW = 10 * 60
 SESSION_TTL = 90 * 24 * 3600
 ADMIN_SESSION_TTL = 7 * 24 * 3600
 
-# 管理員：信箱欄輸入 ADMIN_LOGIN，驗證碼是 ADMIN_TOTP（base32 密鑰）算出的 TOTP。兩個都設定才啟用
+# 全站寄信上限：擋轟炸別人信箱，也避免把寄信服務的額度用光
+MAIL_LIMIT = 40
+MAIL_WINDOW = 10 * 60
+MAIL_DAY_LIMIT = 400
+MAIL_DAY_WINDOW = 24 * 3600
+
+# 請求大小上限
+BODY_MAX = 64 * 1024
+UPLOAD_BODY_MAX = 6 * 1024 * 1024     # 圖片上限 5MB，加上表單的部分
+UPLOAD_PATHS = ("/api/me/avatar", "/api/submissions")
+
+# 上傳的圖：像素上限（2400 萬像素的手機照片可以過）、等前一張處理完最多幾秒
+IMAGE_MAX_PIXELS = 30_000_000
+IMAGE_WAIT = 10
+# 每個帳號每分鐘最多處理幾次（失敗也算）
+AVATAR_LIMIT = 3
+SUBMIT_LIMIT = 10
+UPLOAD_WINDOW = 60
+
+# 管理員：ADMIN_LOGIN 要是信箱格式（不會寄信），驗證碼是 ADMIN_TOTP（base32 密鑰）算出的 TOTP。兩個都設定才啟用
 ADMIN_LOGIN = os.environ.get("ADMIN_LOGIN", "").strip()
 ADMIN_TOTP = os.environ.get("ADMIN_TOTP", "").strip()
 ADMIN_UID = 0

@@ -844,7 +844,7 @@ function bindUpload() {
         ok++;
       } catch (e) {
         showError($("upload-error"), e);
-        if (e.code === "quota_exceeded") break;
+        if (e.code === "quota_exceeded" || e.code === "too_frequent") break;
       }
     }
     if (ok) toast(t("upload.done", { n: ok }));

@@ -118,5 +118,8 @@
   "flag.text": "這個帳號被標記：吱吱次數超過理論上限。",
   "flag.clear": "解除標記",
   "flag.cleared": "已解除標記",
-  "err.cooldown": "吱太快了，冷靜 10 秒再吱"
+  "err.cooldown": "吱太快了，冷靜 10 秒再吱",
+  "err.too_frequent": "操作太頻繁，請稍後再試",
+  "notice.admin_login": "管理員登入",
+  "notice.mail_limit": "寄信數量到達全站上限"
 }

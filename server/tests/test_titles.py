@@ -4,7 +4,7 @@ import sqlite3
 from app import admin, config, db
 from app.titles import text_on
 
-from .conftest import ADMIN_LOGIN, admin_code, login
+from .conftest import admin_code, admin_verify, login
 
 
 def bearer(tok):
@@ -12,8 +12,7 @@ def bearer(tok):
 
 
 def admin_token(client, fake_clock):
-    client.post("/api/auth/request-code", json={"email": ADMIN_LOGIN, "lang": "zh-TW"})
-    r = client.post("/api/auth/verify", json={"email": ADMIN_LOGIN, "code": admin_code(fake_clock), "lang": "zh-TW"})
+    r = admin_verify(client, admin_code(fake_clock))
     assert r.status_code == 200, r.text
     client.cookies.clear()
     return r.json()["token"]

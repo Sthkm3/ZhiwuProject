@@ -11,7 +11,7 @@ from markdown_it import MarkdownIt
 from PIL import Image, ImageOps
 from pydantic import BaseModel
 
-from . import card, clock, config, notices
+from . import card, clock, config, images, limits, notices
 from .checkin import stats
 from .db import get_db, transaction
 from .deps import admin_user, current_user, fail, optional_user
@@ -139,15 +139,7 @@ def patch_me(body: ProfilePatch, user=Depends(current_user), conn: sqlite3.Conne
 
 def process_avatar(data: bytes) -> bytes:
     """置中裁成正方形、縮成 1024×1024、重新編成 WebP（順便去掉 EXIF 與偽裝成圖片的內容）。"""
-    try:
-        with Image.open(io.BytesIO(data)) as im:
-            im.seek(0)
-            im.load()
-            im = ImageOps.exif_transpose(im)
-            has_alpha = im.mode in ("RGBA", "LA", "PA") or (im.mode == "P" and "transparency" in im.info)
-            im = im.convert("RGBA" if has_alpha else "RGB")
-    except Exception:
-        fail(400, "invalid_image")
+    im, _ = images.decode(data)
     size = config.AVATAR_SIZE
     im = ImageOps.fit(im, (size, size), Image.LANCZOS)
     out = io.BytesIO()
@@ -155,13 +147,19 @@ def process_avatar(data: bytes) -> bytes:
     return out.getvalue()
 
 
+_avatar_hits = limits.Window("AVATAR_LIMIT", "UPLOAD_WINDOW")
+
+
 @router.put("/api/me/avatar")
 def put_avatar(file: UploadFile = File(...), user=Depends(current_user),
                conn: sqlite3.Connection = Depends(get_db)):
+    if not _avatar_hits.allow(user["uid"]):
+        fail(429, "too_frequent")
     data = file.file.read(config.AVATAR_MAX_BYTES + 1)
     if len(data) > config.AVATAR_MAX_BYTES:
         fail(413, "file_too_large")
-    webp = process_avatar(data)
+    with images.slot():
+        webp = process_avatar(data)
     folder = config.DATA_DIR / "avatars"
     folder.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=folder, suffix=".tmp")

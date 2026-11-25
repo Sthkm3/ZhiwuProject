@@ -68,7 +68,7 @@ python -m venv .venv
 | `TUNNEL_NETWORK` | cloudflared 所在的 Docker 網路 |
 | `SMTP_HOST`、`SMTP_PORT`、`SMTP_USER`、`SMTP_PASSWORD` | 寄驗證碼的信箱服務。465 用 SSL，其他用 STARTTLS |
 | `MAIL_FROM` | 寄件人，網域要在寄信服務驗證過 |
-| `ADMIN_LOGIN`、`ADMIN_TOTP` | 管理員登入用的名稱與 base32 密鑰，兩個都留空就停用。登入時在信箱欄輸入名稱，驗證碼用 Aegis 等 TOTP App 看 |
+| `ADMIN_LOGIN`、`ADMIN_TOTP` | 管理員登入用的名稱與 base32 密鑰，兩個都留空就停用。名稱要是信箱格式（不會寄信），前綴用猜不到的字，不要用任何使用者的信箱。登入時在信箱欄輸入它，驗證碼用 Aegis 等 TOTP App 看 |
 
 產生一組 `ADMIN_TOTP`：
 
@@ -84,4 +84,15 @@ python -c "import base64, secrets; print(base64.b32encode(secrets.token_bytes(20
 
 不要直接把容器的 port 開到外網：限流會信任 `CF-Connecting-IP`，繞過 Cloudflare 就能偽造。
 
-資料在 `/data`（資料庫、大頭貼、投稿、小卡快取），圖庫在 `/memes`，這兩個要掛出來並備份。程式只能跑一個 worker，限流和冷靜時間都記在記憶體。
+資料在 `/data`（資料庫、大頭貼、投稿、小卡快取），圖庫在 `/memes`，這兩個要掛出來並備份。
+
+容器用 UID/GID **3007:3004** 執行（不是 root），掛進來的資料夾要給它：
+
+```
+chown -R 3007:3004 <資料夾>
+chmod -R u=rwX,go= <資料夾>
+```
+
+也可以用 Docker 的 `user` 設定換成別的 UID，資料夾的擁有者一起換就好。從以 root 執行的舊版升級時也要做一次；資料夾不能讀寫時，啟動的 log 會寫要怎麼改。
+
+程式只能跑一個 worker，限流和冷靜時間都記在記憶體。

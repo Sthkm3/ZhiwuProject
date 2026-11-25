@@ -118,5 +118,8 @@
   "flag.text": "이 계정은 표시되었어요: 찍찍 횟수가 이론상 한도를 넘었어요.",
   "flag.clear": "표시 해제",
   "flag.cleared": "표시를 해제했어요",
-  "err.cooldown": "너무 빨라요. 10초 쉬었다 하세요"
+  "err.cooldown": "너무 빨라요. 10초 쉬었다 하세요",
+  "err.too_frequent": "너무 자주 시도했어요. 잠시 후 다시 시도해 주세요",
+  "notice.admin_login": "관리자 로그인",
+  "notice.mail_limit": "메일 발송이 전체 한도에 도달했어요"
 }
