@@ -203,4 +203,4 @@ def test_parallel_requests_count_once(frozen):  # noqa: F811
 
 def test_no_beta_left(client):
     assert not hasattr(config, "BETA") and "beta" not in client.get("/").text.lower()
-    assert card.CARD_VERSION == 2
+    assert card.CARD_VERSION == 3

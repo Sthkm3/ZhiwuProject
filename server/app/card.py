@@ -19,12 +19,12 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse, Response
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-from . import clock, config, limits
-from .checkin import list_memes, stats
+from . import clock, config, images, limits
+from .checkin import stats
 from .db import get_db
 from .deps import client_ip, fail
 from .i18n import norm_lang, t
-from .images import FORMATS
+from .memes import list_memes, source_of
 from .titles import badge_colors, fmt_uid
 
 router = APIRouter()
@@ -36,7 +36,7 @@ TEXT = (255, 246, 234)
 MUTED = (217, 185, 147)
 INK = (42, 20, 0)
 DEFAULT_MEME = Path(__file__).resolve().parent / "assets" / "default-meme.jpg"
-CARD_VERSION = 2  # 版面改了就加 1，舊的快取自動作廢
+CARD_VERSION = 3  # 版面改了就加 1，舊的快取自動作廢
 DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # Debian 套件 fonts-noto-cjk；同一個 .ttc 裡依序是 JP、KR、SC、TC、HK
@@ -86,20 +86,38 @@ def rounded_mask(size, radius) -> Image.Image:
     return mask
 
 
-def load_image(path: Path) -> Image.Image | None:
-    try:
-        with Image.open(path, formats=FORMATS) as im:
-            im.seek(0)  # gif 只取第一幀
-            im = ImageOps.exif_transpose(im)
-            return im.convert("RGB")
-    except Exception:
-        return None
+load_image = images.load   # RGBA，透明處要自己貼到底色上
+
+
+def source_label(panel: Image.Image, lang: str, source: str, pic_box: tuple[int, int, int, int]) -> None:
+    """圖的右下角小字寫出處（半透明深色底）。圖比框窄時，字太長就往左延伸到框內。"""
+    if not source:
+        return
+    f = font(lang, 26)
+    d = ImageDraw.Draw(panel)
+    text = fit_text(d, t(lang, "card.source", s=source), f, panel.width - 48 - 2 * 14)
+    tw = int(d.textlength(text, font=f))
+    left, top, right, bottom = pic_box
+    right = min(panel.width - 12, max(right - 12, 12 + tw + 28))
+    bottom = bottom - 12
+    layer = Image.new("RGBA", panel.size, (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    ld.rounded_rectangle((right - tw - 28, bottom - 42, right, bottom), 12, fill=(0, 0, 0, 150))
+    ld.text((right - 14, bottom - 21), text, font=f, fill=(255, 246, 234, 235), anchor="rm")
+    panel.alpha_composite(layer)
+
+
+def on_color(im: Image.Image, color) -> Image.Image:
+    """透明的圖貼到底色上（不然透明處會露出底下藏的顏色，常常是白色）。"""
+    base = Image.new("RGBA", im.size, (*color, 255))
+    base.alpha_composite(im.convert("RGBA"))
+    return base.convert("RGB")
 
 
 def draw(lang: str, meme: str | None, name: str, avatar: Image.Image | None, badge: dict | None,
-         headline: str, sub: str, clicks: int) -> Image.Image:
+         headline: str, sub: str, clicks: int, source: str = "") -> Image.Image:
     """小卡的版面。badge = {"uid": "UID 00000001", "colors": (底色, 文字色), "title": 稱號}；
-    訪客沒有 UID，badge 傳 None，那一行就不畫。"""
+    訪客沒有 UID，badge 傳 None，那一行就不畫。source = 圖的出處，空字串不畫。"""
     # 背景：上下漸層
     img = Image.new("RGB", (W, H))
     top, bottom = (70, 38, 12), (24, 13, 5)
@@ -110,21 +128,24 @@ def draw(lang: str, meme: str | None, name: str, avatar: Image.Image | None, bad
 
     # 圖庫抽到的圖
     box_w, box_h = W - 2 * PAD, 760
-    panel = Image.new("RGB", (box_w, box_h), (18, 10, 4))
+    panel = Image.new("RGBA", (box_w, box_h), (18, 10, 4, 255))
     pic = load_image(config.MEME_DIR / meme) if meme else None
-    pic = pic or load_image(DEFAULT_MEME)   # 圖庫是空的（或圖被刪了）就用預設圖
+    if pic is None:
+        pic, source = load_image(DEFAULT_MEME), ""   # 圖庫是空的（或圖被刪了）就用預設圖，出處也不畫
     if pic:
         pic = ImageOps.contain(pic, (box_w, box_h), Image.LANCZOS)
-        panel.paste(pic, ((box_w - pic.width) // 2, (box_h - pic.height) // 2))
+        x, y = (box_w - pic.width) // 2, (box_h - pic.height) // 2
+        panel.alpha_composite(pic, (x, y))      # 透明處就是框的深色底
+        source_label(panel, lang, source, (x, y, x + pic.width, y + pic.height))
     else:
         pd = ImageDraw.Draw(panel)
         pd.text((box_w / 2, box_h / 2), t(lang, "card.no_meme"), font=font(lang, 48), fill=MUTED, anchor="mm")
-    img.paste(panel, (PAD, PAD), rounded_mask(panel.size, 28))
+    img.paste(panel.convert("RGB"), (PAD, PAD), rounded_mask(panel.size, 28))
 
     # 大頭貼（沒有就用主色圓形 + 名稱第一個字）
     av_size, av_y = 168, PAD + box_h + 40
     if avatar:
-        avatar = avatar.resize((av_size, av_size), Image.LANCZOS)
+        avatar = on_color(avatar.resize((av_size, av_size), Image.LANCZOS), ACCENT)
     else:
         avatar = Image.new("RGB", (av_size, av_size), ACCENT)
         ad = ImageDraw.Draw(avatar)
@@ -173,18 +194,20 @@ def draw(lang: str, meme: str | None, name: str, avatar: Image.Image | None, bad
     return img
 
 
-def render(user: sqlite3.Row, day: str, meme: str | None, total: int, streak: int, clicks: int) -> Image.Image:
+def render(user: sqlite3.Row, day: str, meme: str | None, total: int, streak: int, clicks: int,
+           source: str = "") -> Image.Image:
     """登入使用者的小卡。"""
     lang = norm_lang(user["lang"])
     avatar = load_image(config.DATA_DIR / "avatars" / f"{user['uid']}.webp") if user["avatar_ver"] else None
     badge = {"uid": f"UID {fmt_uid(user['uid'])}", "colors": badge_colors(user), "title": user["title"]}
     return draw(lang, meme, user["display_name"], avatar, badge,
-                t(lang, "card.day", n=total), f"{t(lang, 'card.streak', n=streak)}  ·  {day}", clicks)
+                t(lang, "card.day", n=total), f"{t(lang, 'card.streak', n=streak)}  ·  {day}", clicks, source)
 
 
-def render_guest(lang: str, code: str, day: str, meme: str | None, clicks: int) -> Image.Image:
+def render_guest(lang: str, code: str, day: str, meme: str | None, clicks: int, source: str = "") -> Image.Image:
     """訪客的小卡：名稱是「訪客 #XXXX」，沒有 UID、沒有顏色，也沒有簽到天數。"""
-    return draw(lang, meme, t(lang, "card.guest_name", code=code), None, None, t(lang, "card.guest"), day, clicks)
+    return draw(lang, meme, t(lang, "card.guest_name", code=code), None, None, t(lang, "card.guest"), day, clicks,
+                source)
 
 
 def card_dir(uid: int) -> Path:
@@ -206,7 +229,7 @@ def card_path(conn: sqlite3.Connection, uid: int, day: str) -> Path | None:
     if path.exists():
         return path
     total, streak = stats(conn, uid, day)
-    img = render(user, day, row["meme"], total, streak, user["clicks"])
+    img = render(user, day, row["meme"], total, streak, user["clicks"], source_of(row["meme"], conn))
     folder.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=folder, suffix=".tmp")
     with os.fdopen(fd, "wb") as f:
@@ -252,14 +275,15 @@ def get_guest_card(request: Request, code: str = "", n: str = "0", lang: str = c
         fail(404, "not_found")
     clicks, lang, day = int(n), norm_lang(lang), clock.today()
     meme = guest_meme(code, day)
-    key = (code, clicks, lang, day, meme, CARD_VERSION)
+    source = source_of(meme)
+    key = (code, clicks, lang, day, meme, source, CARD_VERSION)
     with _guest_lock:
         png = _guest_cache.get(key)
         if png is None:
             if not _guest_hits.allow(limits.ip_key(client_ip(request))):
                 fail(429, "too_many_requests")
             buf = io.BytesIO()
-            render_guest(lang, code, day, meme, clicks).save(buf, "PNG")
+            render_guest(lang, code, day, meme, clicks, source).save(buf, "PNG")
             png = buf.getvalue()
             _guest_cache[key] = png
             while len(_guest_cache) > config.GUEST_CARD_CACHE:

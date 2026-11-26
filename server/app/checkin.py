@@ -9,24 +9,13 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from . import clock, config, notices
+from .memes import list_memes  # noqa: F401  （其他模組和測試也從這裡拿）
 from .db import get_db, transaction
 from .deps import current_user, fail
 from .i18n import t
 from .titles import fmt_uid
 
 router = APIRouter()
-
-MEME_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
-
-
-def list_memes() -> list[str]:
-    if not config.MEME_DIR.is_dir():
-        return []
-    return sorted(
-        p.name for p in config.MEME_DIR.iterdir()
-        if p.is_file() and p.suffix.lower() in MEME_EXTS and not p.name.startswith(".")
-    )
-
 
 def pick_meme() -> str | None:
     memes = list_memes()

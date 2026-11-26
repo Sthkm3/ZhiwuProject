@@ -54,9 +54,8 @@
         <nav class="me-nav">
           <a id="me-link" href="/" data-i18n="profile.view"></a>
           <a id="upload-link" href="/upload" data-i18n="nav.upload"></a>
-          <a id="review-link" href="/review" hidden></a>
+          <a id="review-link" href="/images" hidden></a>
           <a id="notices-link" href="/notices" hidden></a>
-          <button type="button" class="link" id="edit-profile" data-i18n="profile.edit"></button>
           <button type="button" class="link" id="logout" data-i18n="auth.logout"></button>
         </nav>
       </section>
@@ -120,30 +119,57 @@
       <p class="hint" data-i18n="upload.hint"></p>
       <div class="row upload-bar">
         <label class="button primary" for="upload-file" id="upload-pick" data-i18n="upload.choose"></label>
-        <input type="file" id="upload-file" accept="image/*" multiple hidden>
+        <input type="file" id="upload-file" accept="image/jpeg,image/png,image/webp" multiple hidden>
         <span class="muted" id="upload-quota"></span>
       </div>
+      <label class="source-field"><span data-i18n="source.label"></span>
+        <input id="upload-source" maxlength="40" autocomplete="off" data-i18n-placeholder="source.placeholder">
+      </label>
       <p class="error" id="upload-error" hidden></p>
       <h2 data-i18n="upload.mine"></h2>
       <p class="hint" id="upload-empty" data-i18n="upload.empty" hidden></p>
       <div class="sub-grid" id="upload-list"></div>
     </section>
 
-    <section id="view-review" hidden>
-      <h1 data-i18n="review.heading"></h1>
-      <p class="muted" id="review-left"></p>
+    <section id="view-images" hidden>
+      <h1 data-i18n="images.heading"></h1>
+
+      <h2><span data-i18n="review.heading"></span> <small class="muted" id="review-left"></small></h2>
       <div id="review-item" class="center" hidden>
         <img id="review-img" class="review-img" alt="">
         <p class="review-meta">
           <a id="review-name" href="/"></a> <span class="uid" id="review-uid"></span><br>
           <span class="hint" id="review-time"></span>
         </p>
+        <label class="source-field"><span data-i18n="source.label"></span>
+          <input id="review-source" maxlength="40" autocomplete="off" data-i18n-placeholder="source.placeholder">
+        </label>
         <div class="row actions">
           <button type="button" id="review-reject" data-i18n="review.reject"></button>
           <button type="button" class="primary" id="review-approve" data-i18n="review.approve"></button>
         </div>
       </div>
-      <p class="center-text muted" id="review-empty" data-i18n="review.empty" hidden></p>
+      <p class="muted" id="review-empty" data-i18n="review.empty" hidden></p>
+
+      <h2 data-i18n="images.add"></h2>
+      <p class="hint" data-i18n="images.add_hint"></p>
+      <label class="source-field"><span data-i18n="source.label"></span>
+        <input id="add-source" maxlength="40" autocomplete="off" data-i18n-placeholder="source.placeholder">
+      </label>
+      <div class="row upload-bar">
+        <label class="button primary" for="add-file" id="add-pick" data-i18n="images.choose"></label>
+        <input type="file" id="add-file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+        <span class="muted" id="add-progress"></span>
+      </div>
+      <p class="error" id="add-error" hidden></p>
+
+      <h2 data-i18n="images.gallery"></h2>
+      <div class="row seg">
+        <button type="button" id="gallery-shown" class="on" aria-pressed="true"></button>
+        <button type="button" id="gallery-hidden" aria-pressed="false"></button>
+      </div>
+      <p class="hint" id="gallery-empty" data-i18n="images.empty" hidden></p>
+      <div class="meme-grid" id="gallery"></div>
     </section>
 
     <section id="view-notices" hidden>
@@ -157,6 +183,7 @@
       <div id="user-card" class="profile" hidden>
         <img id="user-avatar" class="avatar large" alt="" width="160" height="160">
         <h1 id="user-name"></h1>
+        <button type="button" id="user-edit" data-i18n="user.edit" hidden></button>
         <div class="uid" id="user-uid"></div>
         <p class="stats" id="user-stats"></p>
         <div class="bio" id="user-bio"></div>
@@ -205,7 +232,7 @@
       <img id="edit-avatar" class="avatar" alt="" width="96" height="96">
       <div>
         <label class="button" for="avatar-file" data-i18n="profile.avatar_change"></label>
-        <input type="file" id="avatar-file" accept="image/*" hidden>
+        <input type="file" id="avatar-file" accept="image/jpeg,image/png,image/webp" hidden>
         <p class="hint" data-i18n="profile.avatar_hint"></p>
       </div>
     </div>

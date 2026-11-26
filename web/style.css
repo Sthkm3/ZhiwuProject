@@ -351,6 +351,15 @@ body.zhi-on { overflow: hidden; }
 }
 .sub-status.approved { background: #2f9e5a; color: #fff; }
 .sub-status.rejected { background: #6b3a3a; color: #fff; }
+.source-field { max-width: 360px; width: 100%; margin-top: 12px; text-align: left; }
+#view-images h2 { margin-top: 32px; }
+.seg { gap: 8px; margin-bottom: 12px; }
+.seg button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.meme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; width: 100%; }
+.meme-item { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.meme-item img { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 8px; background: var(--panel-2); }
+.meme-item input { padding: 6px 8px; font-size: 14px; }
+.meme-item button { padding: 6px 12px; font-size: 14px; }
 .review-img { max-width: 100%; max-height: 60vh; border-radius: 12px; background: var(--panel); box-shadow: 0 12px 40px #0008; }
 .review-meta { margin: 0; line-height: 1.9; }
 #review-name { font-weight: 700; text-decoration: none; }

@@ -10,5 +10,6 @@
   "card.clicks": "チューチュー回数",
   "card.guest_name": "ゲスト #{code}",
   "card.guest": "ゲストチューチュー",
-  "about.yuzumi": "Yuzumi について"
+  "about.yuzumi": "Yuzumi について",
+  "card.source": "出典：{s}"
 }

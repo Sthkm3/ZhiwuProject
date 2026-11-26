@@ -4,13 +4,15 @@ import threading
 import warnings
 from contextlib import contextmanager
 
+from fastapi import HTTPException
 from PIL import Image, ImageOps
 
 from . import config
 from .deps import fail
 
 # 只開這幾種。Pillow 還能讀 PSD、FITS、TIFF 等幾十種，漏洞多半出在那些格式
-FORMATS = ("JPEG", "PNG", "WEBP", "GIF")
+FORMATS = ("JPEG", "PNG", "WEBP", "GIF")        # 讀圖庫裡已經有的圖（以前放進去的 GIF 照樣能畫第一格）
+UPLOAD_FORMATS = ("JPEG", "PNG", "WEBP")        # 使用者上傳：不收 GIF。動態的 WEBP / PNG 只取第一格
 
 # 第二道保險：Pillow 自己在超過這個值的兩倍時會拒絕（例如檔頭和實際內容不一樣大）
 Image.MAX_IMAGE_PIXELS = config.IMAGE_MAX_PIXELS // 2
@@ -30,10 +32,23 @@ def slot():
         _slot.release()
 
 
+def load(path) -> Image.Image | None:
+    """讀圖庫或大頭貼的檔案（不是使用者剛上傳的）：保留透明度，回傳 RGBA。壞掉或不支援的格式回傳 None。"""
+    try:
+        with Image.open(path, formats=FORMATS) as im:
+            im.seek(0)  # GIF 只取第一格
+            ImageOps.exif_transpose(im, in_place=True)
+            return im.convert("RGBA")
+    except Exception:
+        return None
+
+
 def decode(data: bytes) -> tuple[Image.Image, bool]:
     """回傳 (RGB 或 RGBA 的圖, 有沒有透明度)。GIF 只取第一格；方向依 EXIF 轉正。"""
     try:
-        with Image.open(io.BytesIO(data), formats=FORMATS) as im:
+        if data[:6] in (b"GIF87a", b"GIF89a"):
+            fail(400, "unsupported_format")
+        with Image.open(io.BytesIO(data), formats=UPLOAD_FORMATS) as im:
             if im.width * im.height > config.IMAGE_MAX_PIXELS:  # 只讀了檔頭，還沒解碼
                 raise ValueError("too many pixels")
             im.seek(0)
@@ -41,5 +56,7 @@ def decode(data: bytes) -> tuple[Image.Image, bool]:
             ImageOps.exif_transpose(im, in_place=True)
             alpha = im.mode in ("RGBA", "LA", "PA") or (im.mode == "P" and "transparency" in im.info)
             return im.convert("RGBA" if alpha else "RGB"), alpha
+    except HTTPException:
+        raise
     except Exception:
         fail(400, "invalid_image")

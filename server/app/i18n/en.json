@@ -10,5 +10,6 @@
   "card.clicks": "squeaks",
   "card.guest_name": "Guest #{code}",
   "card.guest": "Guest squeak",
-  "about.yuzumi": "About Yuzumi"
+  "about.yuzumi": "About Yuzumi",
+  "card.source": "Source: {s}"
 }

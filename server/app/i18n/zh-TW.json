@@ -10,5 +10,6 @@
   "card.clicks": "吱吱次數",
   "card.guest_name": "訪客 #{code}",
   "card.guest": "訪客吱吱",
-  "about.yuzumi": "關於Yuzumi"
+  "about.yuzumi": "關於Yuzumi",
+  "card.source": "來源：{s}"
 }

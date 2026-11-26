@@ -240,13 +240,25 @@ def test_bomb_rejected_before_decode(client, sent, monkeypatch):
     assert r.status_code == 400 and r.json()["detail"] == "invalid_image"
 
 
-@pytest.mark.parametrize("fmt,ok", [("PNG", 1), ("JPEG", 1), ("WEBP", 1), ("GIF", 1),
+@pytest.mark.parametrize("fmt,ok", [("PNG", 1), ("JPEG", 1), ("WEBP", 1), ("GIF", 0),
                                     ("TIFF", 0), ("BMP", 0), ("ICO", 0), ("TGA", 0), ("PPM", 0), ("PCX", 0)])
 def test_only_four_formats(client, sent, fmt, ok):
     login(client, sent)
     assert put_avatar(client, img(fmt)).status_code == (200 if ok else 400)
     r = client.post("/api/submissions", files={"file": ("a.png", img(fmt), "image/png")})
     assert r.status_code == (200 if ok else 400)
+
+
+def test_gif_upload_rejected(client, sent):
+    login(client, sent)
+    for data in (img("GIF"), img("GIF") + b"x" * 10):
+        r = put_avatar(client, data)
+        assert r.status_code == 400 and r.json()["detail"] == "unsupported_format"
+    frames = [Image.new("RGB", (40, 30), c) for c in ((255, 0, 0), (0, 0, 255))]
+    buf = io.BytesIO()
+    frames[0].save(buf, "WEBP", save_all=True, append_images=frames[1:], lossless=True)
+    im, _ = images.decode(buf.getvalue())                      # 動態 WEBP：只取第一格，存成靜態
+    assert im.getpixel((5, 5))[:3] == (255, 0, 0) and getattr(im, "n_frames", 1) == 1
 
 
 def test_psd_rejected(client, sent):

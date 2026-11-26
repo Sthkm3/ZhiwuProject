@@ -59,11 +59,19 @@ CREATE TABLE IF NOT EXISTS submissions (
     ext         TEXT NOT NULL,                     -- jpg / png
     status      TEXT NOT NULL DEFAULT 'pending',   -- pending / approved / rejected
     meme        TEXT,                              -- 同意後的檔名，例如 zhiwu_14.jpg
+    source      TEXT NOT NULL DEFAULT '',          -- 投稿者填的出處
     created_at  INTEGER NOT NULL,
     reviewed_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS submissions_uid_day ON submissions(uid, day);
 CREATE INDEX IF NOT EXISTS submissions_status ON submissions(status, id);
+
+-- 圖庫裡設定過出處或下架的圖（memes.py）。沒有資料列 = 沒出處、上架中
+CREATE TABLE IF NOT EXISTS memes (
+    name      TEXT PRIMARY KEY,
+    source    TEXT NOT NULL DEFAULT '',
+    hidden_at INTEGER
+);
 
 -- 管理員通知匣（notices.py）
 CREATE TABLE IF NOT EXISTS notices (
@@ -112,20 +120,26 @@ def init():
         conn.close()
 
 
-# 後來才加的 users 欄位：舊的資料庫（CREATE TABLE IF NOT EXISTS 不會補欄位）啟動時自動補上
-_USER_COLUMNS = {
-    "clicks": "INTEGER NOT NULL DEFAULT 0",
-    "title": "TEXT NOT NULL DEFAULT ''",
-    "title_color": "TEXT NOT NULL DEFAULT ''",
-    "flagged_at": "INTEGER",
+# 後來才加的欄位：舊的資料庫（CREATE TABLE IF NOT EXISTS 不會補欄位）啟動時自動補上
+_COLUMNS = {
+    "users": {
+        "clicks": "INTEGER NOT NULL DEFAULT 0",
+        "title": "TEXT NOT NULL DEFAULT ''",
+        "title_color": "TEXT NOT NULL DEFAULT ''",
+        "flagged_at": "INTEGER",
+    },
+    "submissions": {
+        "source": "TEXT NOT NULL DEFAULT ''",
+    },
 }
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
-    have = {r[1] for r in conn.execute("PRAGMA table_info(users)")}
-    for name, decl in _USER_COLUMNS.items():
-        if name not in have:
-            conn.execute(f"ALTER TABLE users ADD COLUMN {name} {decl}")
+    for table, columns in _COLUMNS.items():
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for name, decl in columns.items():
+            if name not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
 
 def _init_admin(conn: sqlite3.Connection) -> None:

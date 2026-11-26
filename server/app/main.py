@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__, anticheat, auth, card, checkin, config, db, limits, notices, share, submissions, users
+from . import __version__, anticheat, auth, card, checkin, config, db, limits, memes, notices, share, submissions, users
 
 # python:3.12-slim 沒有 /etc/mime.types，這些副檔名會被當成 text/plain；加上 nosniff 後瀏覽器可能拒絕播放
 for _type, _ext in (("image/webp", ".webp"), ("video/mp4", ".mp4"), ("audio/mp4", ".m4a"), ("application/manifest+json", ".webmanifest"),
@@ -82,7 +82,7 @@ async def guard(request: Request, call_next):
 
 app.add_middleware(limits.BodyLimit)   # 最後加的在最外層
 
-for module in (auth, users, checkin, card, share, submissions, notices):
+for module in (auth, users, checkin, card, share, submissions, memes, notices):
     app.include_router(module.router)
 
 
@@ -123,6 +123,7 @@ def favicon():
 app.add_api_route("/", index, methods=["GET", "HEAD"], include_in_schema=False)
 app.add_api_route("/u/{uid}", index, methods=["GET", "HEAD"], include_in_schema=False)
 app.add_api_route("/upload", index, methods=["GET", "HEAD"], include_in_schema=False)
-app.add_api_route("/review", index, methods=["GET", "HEAD"], include_in_schema=False)
+app.add_api_route("/review", index, methods=["GET", "HEAD"], include_in_schema=False)   # 1.0 的網址，前端會轉到 /images
+app.add_api_route("/images", index, methods=["GET", "HEAD"], include_in_schema=False)
 app.add_api_route("/notices", index, methods=["GET", "HEAD"], include_in_schema=False)
 app.mount("/assets", StaticFiles(directory=config.WEB_DIR, check_dir=False), name="assets")

@@ -10,5 +10,6 @@
   "card.clicks": "찍찍 횟수",
   "card.guest_name": "게스트 #{code}",
   "card.guest": "게스트 찍찍",
-  "about.yuzumi": "Yuzumi 소개"
+  "about.yuzumi": "Yuzumi 소개",
+  "card.source": "출처: {s}"
 }

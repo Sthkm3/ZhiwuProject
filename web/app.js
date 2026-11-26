@@ -34,6 +34,8 @@ const state = {
   zhiAutoTimer: null,
   zhiCoolUntil: 0,    // 冷靜到什麼時候
   noticeCount: 0,     // 通知匣已經載入幾則
+  gallery: [],        // 管理圖片：圖庫清單
+  galleryHidden: false, // 管理圖片：現在看的是已下架的
   zhiLastAt: 0,       // 上一次繼續吱吱的時間
   zhiPlay: 0,         // 第幾次播放；離開再進來時，舊的那次播完不能動到新的
   zhiFlush: null,     // 正在送次數的 Promise（離開時等它送完）
@@ -63,6 +65,9 @@ async function loadLang(lang) {
   document.documentElement.lang = HTML_LANG[lang];
   $("lang").value = lang;
   document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
   document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
     el.setAttribute("aria-label", t(el.dataset.i18nAria));
   });
@@ -780,7 +785,7 @@ function bindCheckin() {
 // ---------- 畫面切換 ----------
 
 function showView(id) {
-  for (const v of ["view-checkin", "view-user", "view-upload", "view-review", "view-notices"]) $(v).hidden = v !== id;
+  for (const v of ["view-checkin", "view-user", "view-upload", "view-images", "view-notices"]) $(v).hidden = v !== id;
   if (id !== "view-checkin") { clearInterval(state.resetTimer); closeStage(); state.guestOn = false; }
 }
 
@@ -839,6 +844,7 @@ function bindUpload() {
       if (file.size > SUBMIT_MAX_BYTES) { showError($("upload-error"), { code: "file_too_large" }); continue; }
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("source", $("upload-source").value);
       try {
         await api("POST", "/api/submissions", fd);
         ok++;
@@ -847,12 +853,12 @@ function bindUpload() {
         if (e.code === "quota_exceeded" || e.code === "too_frequent") break;
       }
     }
-    if (ok) toast(t("upload.done", { n: ok }));
+    if (ok) { toast(t("upload.done", { n: ok })); $("upload-source").value = ""; }
     await refreshUploads();
   });
 }
 
-// ---------- 管理員審核（一張一張） ----------
+// ---------- 管理圖片：審核投稿（一張一張）、新增、圖庫 ----------
 
 async function loadReview() {
   try {
@@ -870,17 +876,108 @@ async function loadReview() {
     $("review-name").href = `/u/${it.uploader.uid_str}`;
     showUid($("review-uid"), it.uploader);
     $("review-time").textContent = new Date(it.created_at).toLocaleString(HTML_LANG[state.lang]);
+    $("review-source").value = it.source || "";
   } catch (e) {
     if (e.status === 401 || e.status === 403) { location.replace("/"); return; }
     toast(errText(e));
   }
 }
 
-async function showReview() {
-  showView("view-review");
-  document.title = `${t("review.heading")} · ${SITE_TITLE}`;
+async function showImages() {
+  if (location.pathname !== "/images") history.replaceState(null, "", "/images"); // 1.0 的 /review
+  showView("view-images");
+  document.title = `${t("images.heading")} · ${SITE_TITLE}`;
   if (!state.me?.is_admin) { location.replace("/"); return; }
-  await loadReview();
+  await Promise.all([loadReview(), loadGallery()]);
+}
+
+async function loadGallery() {
+  try {
+    state.gallery = (await api("GET", "/api/admin/memes")).items;
+    renderGallery();
+  } catch (e) {
+    if (e.status === 401 || e.status === 403) { location.replace("/"); return; }
+    toast(errText(e));
+  }
+}
+
+function renderGallery() {
+  const hidden = state.galleryHidden;
+  const shown = state.gallery.filter((m) => !m.hidden);
+  $("gallery-shown").textContent = t("images.shown", { n: shown.length });
+  $("gallery-hidden").textContent = t("images.hidden", { n: state.gallery.length - shown.length });
+  for (const [id, on] of [["gallery-shown", !hidden], ["gallery-hidden", hidden]]) {
+    $(id).classList.toggle("on", on);
+    $(id).setAttribute("aria-pressed", String(on));
+  }
+  const items = state.gallery.filter((m) => m.hidden === hidden);
+  $("gallery-empty").hidden = items.length > 0;
+  $("gallery").replaceChildren(...items.map(galleryItem));
+}
+
+function galleryItem(m) {
+  const box = document.createElement("div");
+  box.className = "meme-item";
+  const img = document.createElement("img");
+  img.src = m.thumb_url;
+  img.alt = m.name;
+  img.loading = "lazy";
+  img.title = m.name;
+  const used = document.createElement("span");
+  used.className = "hint";
+  used.textContent = t("images.used", { n: fmtNum(m.used) });
+  const source = document.createElement("input");
+  source.maxLength = 40;
+  source.value = m.source;
+  source.placeholder = t("source.placeholder");
+  source.setAttribute("aria-label", t("source.label"));
+  source.addEventListener("change", () => updateMeme(m.name, { source: source.value }, source));
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.textContent = t(m.hidden ? "images.show" : "images.hide");
+  toggle.addEventListener("click", () => updateMeme(m.name, { hidden: !m.hidden }, toggle));
+  box.append(img, used, source, toggle);
+  return box;
+}
+
+async function updateMeme(name, body, el) {
+  el.disabled = true;
+  try {
+    const m = await api("PUT", `/api/admin/memes/${encodeURIComponent(name)}`, body);
+    state.gallery = state.gallery.map((x) => (x.name === name ? m : x));
+    toast(t("images.saved"));
+    if ("hidden" in body) renderGallery();
+  } catch (e) {
+    toast(errText(e));
+  } finally {
+    el.disabled = false;
+  }
+}
+
+async function addImages(files) {
+  const total = files.length;
+  $("add-pick").classList.add("busy");
+  showError($("add-error"), null);
+  let ok = 0;
+  for (const [i, file] of files.entries()) { // 一張一張傳
+    $("add-progress").textContent = t("images.progress", { i: i + 1, n: total });
+    if (file.size > SUBMIT_MAX_BYTES) { showError($("add-error"), { code: "file_too_large" }); continue; }
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("source", $("add-source").value);
+    try {
+      await api("POST", "/api/admin/memes", fd);
+      ok++;
+    } catch (e) {
+      showError($("add-error"), e);
+      if (e.code === "too_frequent" || e.code === "source_too_long") break;
+    }
+  }
+  $("add-progress").textContent = "";
+  $("add-pick").classList.remove("busy");
+  if (ok) { toast(t("images.added", { n: ok })); $("add-source").value = ""; }
+  state.galleryHidden = false;
+  await loadGallery();
 }
 
 function bindReview() {
@@ -889,8 +986,10 @@ function bindReview() {
     const sid = $("review-item").dataset.id;
     buttons.forEach((b) => { b.disabled = true; });
     try {
-      await api("POST", `/api/admin/submissions/${sid}/${action}`);
+      const body = action === "approve" ? { source: $("review-source").value } : undefined;
+      await api("POST", `/api/admin/submissions/${sid}/${action}`, body);
       toast(t(`review.${action}d`));
+      if (action === "approve") loadGallery();
     } catch (e) {
       // 已經審過（例如另一個分頁）就直接跳下一張
       if (e.code !== "already_reviewed" && e.code !== "not_found") toast(errText(e));
@@ -901,6 +1000,14 @@ function bindReview() {
   };
   $("review-approve").addEventListener("click", () => decide("approve"));
   $("review-reject").addEventListener("click", () => decide("reject"));
+  $("add-file").addEventListener("change", (ev) => {
+    const files = [...ev.target.files];
+    ev.target.value = "";
+    if (files.length) addImages(files);
+  });
+  for (const [id, hidden] of [["gallery-shown", false], ["gallery-hidden", true]]) {
+    $(id).addEventListener("click", () => { state.galleryHidden = hidden; renderGallery(); });
+  }
 }
 
 // ---------- 管理員通知匣 ----------
@@ -982,6 +1089,7 @@ async function showUser(uid) {
     // 管理員：下面多一個設定這個 UID 顏色與稱號的表單
     const form = $("title-form");
     form.hidden = !state.me?.is_admin;
+    $("user-edit").hidden = state.me?.uid !== u.uid; // 只能改自己的
     $("flag-box").hidden = !u.flagged;
     $("flag-box").dataset.uid = u.uid;
     form.dataset.uid = u.uid;
@@ -1033,7 +1141,7 @@ function bindTitle() {
 function bindProfile() {
   const dialog = $("profile-dialog");
 
-  $("edit-profile").addEventListener("click", () => {
+  $("user-edit").addEventListener("click", () => {
     const me = state.me;
     $("edit-avatar").src = me.avatar_url || DEFAULT_AVATAR;
     $("edit-name").value = me.display_name;
@@ -1122,7 +1230,7 @@ async function route() {
   const m = location.pathname.match(/^\/u\/(\d+)$/);
   if (m) return showUser(m[1]);
   if (location.pathname === "/upload") return showUpload();
-  if (location.pathname === "/review") return showReview();
+  if (location.pathname === "/images" || location.pathname === "/review") return showImages();
   if (location.pathname === "/notices") return showNotices();
   return showCheckin();
 }

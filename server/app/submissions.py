@@ -1,30 +1,25 @@
 """使用者投稿迷因圖，管理員審核。
 
 流程：使用者上傳 → 重新編碼後存在 DATA_DIR/submissions/<id>.<ext>（pending）
-      → 管理員同意：依 image/ 的命名規則存成 MEME_DIR/zhiwu_<下一號>.<ext>，之後的小卡就可能抽到
+      → 管理員同意：依 image/ 的命名規則存成 MEME_DIR/zhiwu_<下一號>.<ext>（memes.store_meme），之後的小卡就可能抽到
       → 管理員拒絕：刪掉檔案，紀錄保留（每日額度要算）
 """
-import io
-import os
-import re
-import shutil
 import sqlite3
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import FileResponse
-from PIL import Image
+from pydantic import BaseModel
 
 from . import clock, config, images, limits
+from .memes import clean_source, process_meme, store_meme, write_atomic
 from .db import get_db, transaction
 from .deps import admin_user, current_user, fail
 from .titles import badge, fmt_uid
 
 router = APIRouter()
 
-MEME_NAME = re.compile(r"^zhiwu_(\d+)\.[A-Za-z0-9]+$")
 MEDIA_TYPES = {"jpg": "image/jpeg", "png": "image/png", "jpeg": "image/jpeg",
                "webp": "image/webp", "gif": "image/gif"}
 
@@ -35,37 +30,6 @@ def submission_dir() -> Path:
 
 def pending_path(row: sqlite3.Row) -> Path:
     return submission_dir() / f"{row['id']}.{row['ext']}"
-
-
-def process_meme(data: bytes) -> tuple[bytes, str]:
-    """重新編碼成 JPEG（有透明度就用 PNG）：去掉 EXIF（含 GPS）和偽裝成圖片的內容，GIF 只取第一格。"""
-    im, has_alpha = images.decode(data)
-    if max(im.size) > config.SUBMIT_MAX_SIDE:
-        im.thumbnail((config.SUBMIT_MAX_SIDE, config.SUBMIT_MAX_SIDE), Image.LANCZOS)
-    out = io.BytesIO()
-    if has_alpha:
-        im.save(out, "PNG", optimize=True)
-        return out.getvalue(), "png"
-    im.save(out, "JPEG", quality=90, optimize=True)
-    return out.getvalue(), "jpg"
-
-
-def write_atomic(path: Path, data: bytes) -> None:
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
-        os.replace(tmp, path)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
-
-
-def next_meme_number() -> int:
-    """迷因資料夾裡 zhiwu_<n>.* 的最大編號 + 1。"""
-    nums = [int(m.group(1)) for p in config.MEME_DIR.iterdir() if (m := MEME_NAME.match(p.name))] \
-        if config.MEME_DIR.is_dir() else []
-    return max(nums, default=-1) + 1
 
 
 def iso(ts: int | None) -> str | None:
@@ -87,7 +51,7 @@ def quota(conn: sqlite3.Connection, uid: int) -> dict:
 
 def item(row: sqlite3.Row) -> dict:
     return {"id": row["id"], "status": row["status"], "created_at": iso(row["created_at"]),
-            "image_url": image_url(row)}
+            "image_url": image_url(row), "source": row["source"]}
 
 
 def pending_count(conn: sqlite3.Connection) -> int:
@@ -100,7 +64,9 @@ _upload_hits = limits.Window("SUBMIT_LIMIT", "UPLOAD_WINDOW")
 
 
 @router.post("/api/submissions")
-def upload(file: UploadFile = File(...), user=Depends(current_user), conn: sqlite3.Connection = Depends(get_db)):
+def upload(file: UploadFile = File(...), source: str = Form(""), user=Depends(current_user),
+           conn: sqlite3.Connection = Depends(get_db)):
+    source = clean_source(source)
     if not _upload_hits.allow(user["uid"]):
         fail(429, "too_frequent")
     data = file.file.read(config.SUBMIT_MAX_BYTES + 1)
@@ -114,8 +80,8 @@ def upload(file: UploadFile = File(...), user=Depends(current_user), conn: sqlit
     with transaction(conn):
         if used_today(conn, user["uid"], day) >= config.SUBMIT_PER_DAY:
             fail(429, "quota_exceeded")
-        cur = conn.execute("INSERT INTO submissions(uid, day, ext, created_at) VALUES (?, ?, ?, ?)",
-                           (user["uid"], day, ext, clock.ts()))
+        cur = conn.execute("INSERT INTO submissions(uid, day, ext, source, created_at) VALUES (?, ?, ?, ?, ?)",
+                           (user["uid"], day, ext, source, clock.ts()))
         row = conn.execute("SELECT * FROM submissions WHERE id = ?", (cur.lastrowid,)).fetchone()
         write_atomic(pending_path(row), body)
     return {"item": item(row), **quota(conn, user["uid"])}
@@ -176,30 +142,22 @@ def _load_pending(conn: sqlite3.Connection, sid: int) -> sqlite3.Row:
     return row
 
 
+class ApproveIn(BaseModel):
+    source: str | None = None   # 沒給 = 用投稿者填的
+
+
 @router.post("/api/admin/submissions/{sid}/approve")
-def approve(sid: int, admin=Depends(admin_user), conn: sqlite3.Connection = Depends(get_db)):
+def approve(sid: int, body: ApproveIn | None = None, admin=Depends(admin_user),
+            conn: sqlite3.Connection = Depends(get_db)):
     with transaction(conn):  # 寫入鎖確保兩次同意不會拿到同一個編號
         row = _load_pending(conn, sid)
         src = pending_path(row)
         if not src.is_file():
             fail(404, "not_found")
-        config.MEME_DIR.mkdir(parents=True, exist_ok=True)
-        n = next_meme_number()
-        while any(config.MEME_DIR.glob(f"zhiwu_{n}.*")):
-            n += 1
-        name = f"zhiwu_{n}.{row['ext']}"
-        # 先複製成 . 開頭的暫存檔（抽卡會略過），完整寫好再改名
-        fd, tmp = tempfile.mkstemp(dir=config.MEME_DIR, prefix=".", suffix=".tmp")
-        os.close(fd)
-        try:
-            shutil.copyfile(src, tmp)
-            os.chmod(tmp, 0o644)  # mkstemp 是 0600，圖庫要讓 NAS 上的其他帳號也讀得到
-            os.replace(tmp, config.MEME_DIR / name)
-        except BaseException:
-            Path(tmp).unlink(missing_ok=True)
-            raise
-        conn.execute("UPDATE submissions SET status = 'approved', meme = ?, reviewed_at = ? WHERE id = ?",
-                     (name, clock.ts(), sid))
+        source = clean_source(row["source"] if body is None or body.source is None else body.source)
+        name = store_meme(conn, src.read_bytes(), row["ext"], source)
+        conn.execute("UPDATE submissions SET status = 'approved', meme = ?, source = ?, reviewed_at = ? WHERE id = ?",
+                     (name, source, clock.ts(), sid))
     src.unlink(missing_ok=True)
     print(f"[review] approved #{sid} from UID {fmt_uid(row['uid'])} -> {name}", flush=True)
     return {"id": sid, "status": "approved", "meme": name, "pending": pending_count(conn)}

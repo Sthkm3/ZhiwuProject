@@ -13,7 +13,7 @@ clone 之後要改哪些地方、怎麼在自己的電腦跑起來、怎麼部�
 | 信件、小卡、分享文字 | `server/app/i18n/*.json` |
 | 吱吱影片 | 換掉 `media-src/zhizhi.mp4`，執行 `tools/make_media.py` |
 | 圖標 | 換掉 `icon/zhiwu.jpg`，執行 `tools/make_icons.py`（也會產生圖庫是空的時候用的預設圖） |
-| 圖庫 | 圖片放進 `image/`（jpg / png / webp / gif），不用重啟 |
+| 圖庫 | 用管理員登入後的「管理圖片」新增、改出處、下架；也可以直接把圖放進 `image/`（jpg / png / webp / gif），不用重啟 |
 | 網頁顏色 | `web/style.css` 最上面的 `:root` |
 | 小卡版面與顏色 | `server/app/card.py`；改完把 `CARD_VERSION` 加 1，舊的小卡才會重畫 |
 | UID 底色 | `server/app/titles.py` 和 `web/style.css` 的 `.uid`，兩邊要一樣 |
